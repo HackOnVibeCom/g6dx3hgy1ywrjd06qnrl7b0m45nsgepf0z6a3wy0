@@ -1,0 +1,109 @@
+{
+  "version": "1.0",
+  "name": "InBudget — Interactive 3D Shortlist",
+  "meta": {
+    "designSystem": "./DESIGN.md",
+    "tokens": "./dist/tokens.css"
+  },
+  "variables": {
+    "paper": { "type": "color", "value": "#F6F2E8" },
+    "surface": { "type": "color", "value": "#FFFDF7" },
+    "ink": { "type": "color", "value": "#1E2D24" },
+    "spruce": { "type": "color", "value": "#174B38" },
+    "stageObsidian": { "type": "color", "value": "#0E1D17" },
+    "stageForest": { "type": "color", "value": "#1D362B" },
+    "lime": { "type": "color", "value": "#CBE285" },
+    "brass": { "type": "color", "value": "#C8A96E" }
+  },
+  "children": [
+    {
+      "id": "frame-desktop",
+      "type": "frame",
+      "name": "Desktop — 1440×900",
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 900,
+      "fill": "#F6F2E8",
+      "layout": "vertical",
+      "padding": [24, 60, 32, 60],
+      "gap": 28,
+      "children": [
+        {
+          "id": "top-nav",
+          "type": "frame",
+          "name": "Top Navigation",
+          "width": 1320,
+          "height": 56,
+          "layout": "horizontal",
+          "justifyContent": "space-between",
+          "alignItems": "center",
+          "children": [
+            { "id": "brand-text", "type": "text", "name": "Brand", "content": "inbudget.", "fontSize": 28, "fontWeight": 800, "fill": "#1E2D24" },
+            { "id": "cta-host", "type": "frame", "name": "Create Round Pill", "width": 164, "height": 42, "cornerRadius": 30, "stroke": "#AEB7A7", "strokeWidth": 1 }
+          ]
+        },
+        {
+          "id": "hero-split",
+          "type": "frame",
+          "name": "Editorial Split + 3D PBR Stage",
+          "width": 1320,
+          "height": 680,
+          "layout": "horizontal",
+          "gap": 40,
+          "alignItems": "center",
+          "children": [
+            {
+              "id": "hero-copy",
+              "type": "frame",
+              "name": "Editorial Copy",
+              "width": 470,
+              "height": 460,
+              "layout": "vertical",
+              "gap": 20,
+              "children": [
+                { "id": "eyebrow", "type": "text", "content": "THE GROUP STAY DECISION", "fontSize": 11, "fontWeight": 700, "fill": "#4F5E52" },
+                { "id": "headline", "type": "text", "content": "Find the stay everyone can say yes to.", "fontFamily": "Georgia", "fontSize": 76, "fill": "#1E2D24" },
+                { "id": "deck", "type": "text", "content": "Three quotes. One private answer per traveler. A shortlist that fits the whole group.", "fontSize": 17, "fill": "#465648" }
+              ]
+            },
+            {
+              "id": "stage-card",
+              "type": "frame",
+              "name": "3D Diorama Stage (Three.js PBR)",
+              "width": 810,
+              "height": 640,
+              "cornerRadius": 20,
+              "fill": "#12251D",
+              "stroke": "#355243",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "children": [
+                { "id": "stage-header", "type": "frame", "name": "Stage Telemetry Header", "width": 810, "height": 50, "fill": "#0E1D17" },
+                { "id": "webgl-viewport", "type": "frame", "name": "Three.js GLB Canvas (Fern / Ridge / Laurel)", "width": 810, "height": 456, "fill": "#183026" },
+                { "id": "plaque-bar", "type": "frame", "name": "Interactive Stay Plaques", "width": 810, "height": 134, "fill": "#10211A" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "frame-mobile",
+      "type": "frame",
+      "name": "Mobile — 390×844",
+      "x": 1520,
+      "y": 0,
+      "width": 390,
+      "height": 844,
+      "fill": "#F6F2E8",
+      "layout": "vertical",
+      "padding": [16, 16, 24, 16],
+      "gap": 16,
+      "children": [
+        { "id": "m-headline", "type": "text", "content": "Find the stay everyone can say yes to.", "fontFamily": "Georgia", "fontSize": 52, "fill": "#1E2D24" },
+        { "id": "m-stage", "type": "frame", "name": "Mobile 3D Stage + 3 Plaques", "width": 358, "height": 430, "cornerRadius": 18, "fill": "#12251D" }
+      ]
+    }
+  ]
+}

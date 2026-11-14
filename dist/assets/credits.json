@@ -1,0 +1,65 @@
+[
+  {
+    "file": "fern-hollow-cabin.glb",
+    "title": "Nordic Timber Cabin (Sauna v2, LOD1)",
+    "url": "https://tevy.dev/models/sauna/v2/lod1.glb",
+    "source": "https://tevy.dev/models/sauna",
+    "license": "CC0 1.0 Universal"
+  },
+  {
+    "file": "ridge-house.glb",
+    "title": "Falu Red Country Cottage (v2, LOD1)",
+    "url": "https://tevy.dev/models/red-cottage/v2/lod1.glb",
+    "source": "https://tevy.dev/models/red-cottage",
+    "license": "CC0 1.0 Universal"
+  },
+  {
+    "file": "laurel-lodge.glb",
+    "title": "Stone & Timber Mountain Lodge (v1, LOD1)",
+    "url": "https://tevy.dev/models/medieval-tavern/v1/lod1.glb",
+    "source": "https://tevy.dev/models/medieval-tavern",
+    "license": "CC0 1.0 Universal"
+  },
+  {
+    "file": "spruce.glb",
+    "title": "Young Spruce Conifer (v1, LOD2)",
+    "url": "https://tevy.dev/models/young-spruce/v1/lod2.glb",
+    "source": "https://tevy.dev/models/young-spruce",
+    "license": "CC0 1.0 Universal"
+  },
+  {
+    "file": "mossy-rocks.glb",
+    "title": "Mossy Forest Rocks (v1, LOD2)",
+    "url": "https://tevy.dev/models/mossy-rocks/v1/lod2.glb",
+    "source": "https://tevy.dev/models/mossy-rocks",
+    "license": "CC0 1.0 Universal"
+  },
+  {
+    "file": "bracken-fern.glb",
+    "title": "Bracken Fern Cluster (v1, LOD2)",
+    "url": "https://tevy.dev/models/bracken-fern/v1/lod2.glb",
+    "source": "https://tevy.dev/models/bracken-fern",
+    "license": "CC0 1.0 Universal"
+  },
+  {
+    "file": "campfire.glb",
+    "title": "Stone Campfire Ring (v1, LOD2)",
+    "url": "https://tevy.dev/models/campfire-ring/v1/lod2.glb",
+    "source": "https://tevy.dev/models/campfire-ring",
+    "license": "CC0 1.0 Universal"
+  },
+  {
+    "file": "lantern.glb",
+    "title": "Warm Storm Lantern (v1, LOD2)",
+    "url": "https://tevy.dev/models/storm-lantern/v1/lod2.glb",
+    "source": "https://tevy.dev/models/storm-lantern",
+    "license": "CC0 1.0 Universal"
+  },
+  {
+    "file": "golden-hour-sky.jpg",
+    "title": "Golden Hour Sky Panorama",
+    "url": "https://tevy.dev/skies/golden-hour/1k.jpg",
+    "source": "https://tevy.dev/skies/golden-hour",
+    "license": "CC0 1.0 Universal"
+  }
+]

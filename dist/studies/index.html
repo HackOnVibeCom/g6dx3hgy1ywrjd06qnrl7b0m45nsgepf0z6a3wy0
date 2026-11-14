@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Interaction studies behind InBudget's staged disclosure and live attribution."><meta name="theme-color" content="#0f221b">
+<title>InBudget · Interaction studies</title>
+<link rel="stylesheet" href="/tokens.css"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/studies/studies.css"></head>
+<body>
+<a class="skip" href="#studies-main">Skip to content</a>
+<header class="top wrap">
+  <a class="brand" href="/" aria-label="InBudget home"><span class="mark" aria-hidden="true"></span>inbudget<span class="dot">.</span></a>
+  <nav aria-label="Main"><span class="nav-pill">Design notes</span><a class="outline" href="/">Open shortlist <span class="arrow" aria-hidden="true"></span></a></nav>
+</header>
+<main class="wrap studies-main" id="studies-main" tabindex="-1">
+  <section class="studies-hero" data-od-id="studies-intro">
+    <p class="eyebrow"><span class="spark"></span> Interaction studies</p>
+    <h1>Two references.<br><em>Two interactions.</em></h1>
+    <p>Independent reconstructions isolating the two interaction principles behind InBudget’s Three.js PBR lodge stage and privacy-preserving group shortlist.</p>
+  </section>
+
+  <section class="study-block" data-od-id="study-apple" aria-labelledby="study-apple-title">
+    <div class="study-stage apple">
+      <div>
+        <span class="study-kicker">01 / Staged product disclosure</span>
+        <h2 id="study-apple-title">From one hero stay to the full lineup.</h2>
+        <p>Hold the active quote in focus while supporting options fan apart cleanly so the group never loses its visual anchor.</p>
+        <div class="study-controls">
+          <button class="study-btn" id="reveal" type="button" aria-pressed="false">Separate the stays</button>
+        </div>
+      </div>
+      <div class="art" id="layers" aria-hidden="true">
+        <div class="tile tile-three"><small>03 · Laurel Lodge</small><strong>$179.00</strong></div>
+        <div class="tile tile-two"><small>02 · Ridge House</small><strong>$142.00</strong></div>
+        <div class="tile tile-one"><small>01 · Fern Hollow</small><strong>$110.01</strong></div>
+      </div>
+    </div>
+    <p class="study-note"><strong>Deconstruction.</strong> One focal object, staged disclosure, stable visual anchor. On the home screen, scrolling smoothly pulls the Three.js camera from a hero close-up into a three-island lineup while keeping the selected stay, per-night share, and verdict synchronized.</p>
+  </section>
+
+  <section class="study-block" data-od-id="study-nike" aria-labelledby="study-nike-title">
+    <div class="study-stage nike">
+      <div>
+        <span class="study-kicker">02 / Live state attribution</span>
+        <h2 id="study-nike-title">See exactly what changed.</h2>
+        <p>Select a layer, then adjust finishes or group size while the stay card and per-person split update in place.</p>
+        <div class="study-controls study-controls-spaced">
+          <button class="study-btn" id="part" type="button" aria-pressed="false">Editing: Canopy roof</button>
+        </div>
+        <div class="study-controls" id="colors" role="group" aria-label="Finish palette">
+          <button class="study-btn" type="button" data-color="var(--st-spruce)" aria-pressed="true">Spruce</button>
+          <button class="study-btn" type="button" data-color="var(--st-falu)" aria-pressed="false">Falu Red</button>
+          <button class="study-btn" type="button" data-color="var(--st-slate)" aria-pressed="false">Slate</button>
+        </div>
+        <p id="feedback" class="study-feedback" role="status">Canopy roof · Spruce</p>
+      </div>
+      <div class="art" aria-hidden="true">
+        <div class="lodge-card" id="preview-card">
+          <div class="lodge-roof"><span>Ridge House</span><span>4 Travelers</span></div>
+          <div class="lodge-body"><strong>$142.00</strong><small>$47.33 / night · Fits everyone</small></div>
+        </div>
+      </div>
+    </div>
+    <p class="study-note"><strong>Deconstruction.</strong> Explicit part selection and immediate visual feedback make state transitions effortless to attribute. InBudget applies the same immediate feedback across the 3D diorama, plaque bar, price spectrum track, and budget slider.</p>
+  </section>
+
+  <section class="handoff-box" data-od-id="studies-handoff" aria-labelledby="handoff">
+    <h2 id="handoff">How the studies became InBudget</h2>
+    <p><strong>Spatial continuity.</strong> The intro fly-in, 360° auto-orbiting Three.js PBR dioramas, plaque selector, and shortlist price track all address the same three stays in the same order, so clicking an island in 3D, pressing arrow keys on the plaques, or tapping a stop on the price track updates every view together.</p>
+    <p><strong>Privacy-first group math.</strong> Each traveler enters or slides their private cap on their own device; the round stores and reveals only unanimous stay fit and the shared budget band—never anyone’s individual limit.</p>
+    <a class="primary" href="/">Open the shortlist studio <span class="arrow" aria-hidden="true"></span></a>
+  </section>
+</main>
+<footer class="wrap footer">
+  <a class="brand" href="/"><span class="mark" aria-hidden="true"></span>inbudget<span class="dot">.</span></a>
+  <span>Interaction studies · Alpine Twilight design system</span>
+  <a href="/">Back to shortlist</a>
+</footer>
+<script>
+const reveal = document.querySelector('#reveal');
+reveal.onclick = () => {
+  const open = document.querySelector('#layers').classList.toggle('open');
+  reveal.setAttribute('aria-pressed', String(open));
+  reveal.textContent = open ? 'Bring stays together' : 'Separate the stays';
+};
+const card = document.querySelector('#preview-card');
+const part = document.querySelector('#part');
+const colors = [...document.querySelectorAll('[data-color]')];
+let trimMode = false;
+const selected = { roof: colors[0], trim: colors[0] };
+function update() {
+  const activeBtn = selected[trimMode ? 'trim' : 'roof'];
+  colors.forEach(btn => btn.setAttribute('aria-pressed', String(btn === activeBtn)));
+  document.querySelector('#feedback').textContent = (trimMode ? 'Porch trim' : 'Canopy roof') + ' · ' + activeBtn.textContent;
+}
+part.onclick = () => {
+  trimMode = !trimMode;
+  part.setAttribute('aria-pressed', String(trimMode));
+  part.textContent = trimMode ? 'Editing: Porch trim' : 'Editing: Canopy roof';
+  update();
+};
+colors.forEach(btn => {
+  btn.onclick = () => {
+    selected[trimMode ? 'trim' : 'roof'] = btn;
+    card.style.setProperty(trimMode ? '--deck-tone' : '--roof-tone', btn.dataset.color);
+    update();
+  };
+});
+</script>
+</body></html>

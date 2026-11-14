@@ -1,0 +1,16 @@
+{
+  "name": "inbudget",
+  "version": "1.0.0",
+  "private": true,
+  "author": "aaravjj2",
+  "description": "InBudget — Privacy-preserving group lodging shortlist with an interactive Three.js PBR 3D stage.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HackOnVibeCom/g6dx3hgy1ywrjd06qnrl7b0m45nsgepf0z6a3wy0.git"
+  },
+  "scripts": {
+    "build": "node --test test_domain.mjs",
+    "test": "node --test test_domain.mjs",
+    "start": "python server.py"
+  }
+}

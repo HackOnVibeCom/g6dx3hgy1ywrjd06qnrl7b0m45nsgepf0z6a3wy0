@@ -1,0 +1,174 @@
+:root {
+  --st-card-bg: #fffdf8;
+  --st-card-warm: #f1ecdd;
+  --st-dark-0: #0b1813;
+  --st-dark-1: #12261e;
+  --st-dark-2: #193528;
+  --st-dark-3: #2d5540;
+  --st-dark-border: #2f4d3d;
+  --st-light-ink: #f4f1e4;
+  --st-lime-top: #f3f8de;
+  --st-spruce: #2f4f3e;
+  --st-falu: #8c4a38;
+  --st-slate: #354352;
+}
+.studies-main { padding: 44px 0 64px; }
+.mark::before, .arrow::before { content: ""; display: block; width: 8px; height: 8px; border-top: 2px solid currentColor; border-right: 2px solid currentColor; transform: rotate(5deg); }
+.mark::before { width: 9px; height: 9px; }
+.arrow { display: inline-flex; align-items: center; }
+.studies-hero { max-width: 760px; margin-bottom: 44px; }
+.studies-hero h1 { font-size: clamp(48px, 6.6vw, 88px); line-height: 0.92; letter-spacing: -0.068em; margin: 16px 0 16px; }
+.studies-hero p { font-size: 17px; line-height: 1.55; color: var(--ib-ink-muted); max-width: 58ch; }
+.study-block { margin: 0 0 48px; }
+.study-stage {
+  min-height: 360px;
+  padding: clamp(22px, 3.6vw, 40px);
+  border-radius: 22px;
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(260px, 0.95fr) minmax(0, 1.05fr);
+  gap: 32px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  box-shadow: var(--ib-shadow-card);
+}
+.study-stage.apple {
+  background:
+    radial-gradient(ellipse 64% 52% at 72% 46%, rgba(212, 180, 117, 0.18) 0%, transparent 66%),
+    linear-gradient(160deg, var(--st-dark-1) 0%, var(--st-dark-0) 100%);
+  border-color: var(--st-dark-border);
+  color: var(--st-light-ink);
+}
+.study-stage.nike {
+  background: linear-gradient(180deg, var(--st-card-bg) 0%, var(--st-card-warm) 100%);
+}
+.study-kicker {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  color: var(--ib-lime);
+}
+.nike .study-kicker { color: var(--ib-green); }
+.study-stage h2 { font-size: clamp(30px, 3.6vw, 44px); margin: 0 0 12px; color: inherit; }
+.study-stage p { margin: 0 0 18px; line-height: 1.5; opacity: 0.9; max-width: 44ch; }
+.study-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.study-controls-spaced { margin-bottom: 10px; }
+.study-feedback { margin: 12px 0 0; font-size: 13px; font-weight: 700; color: var(--ib-green); }
+.apple .study-btn {
+  padding: 10px 18px;
+  border-radius: 99px;
+  border: 1px solid rgba(203, 227, 130, 0.5);
+  background: rgba(23, 49, 38, 0.85);
+  color: var(--ib-stage-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.apple .study-btn[aria-pressed="true"] {
+  background: var(--ib-lime-soft);
+  border-color: var(--ib-lime-soft);
+  color: var(--ib-ink);
+}
+.nike .study-btn {
+  padding: 9px 16px;
+  border-radius: 99px;
+  border: 1px solid var(--ib-line-strong);
+  background: var(--st-card-bg);
+  color: var(--ib-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.nike .study-btn[aria-pressed="true"] {
+  background: var(--ib-green);
+  border-color: var(--ib-green);
+  color: var(--st-card-bg);
+}
+.art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 250px;
+  perspective: 800px;
+}
+.tile {
+  position: absolute;
+  width: min(68%, 270px);
+  aspect-ratio: 1.55;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(236, 244, 214, 0.42);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 22px 44px rgba(4, 12, 9, 0.48);
+  transition: transform 0.62s var(--ib-ease, ease), background 0.35s ease;
+}
+.tile small { font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.82; }
+.tile strong { font: 400 clamp(22px, 3vw, 32px) Georgia, serif; letter-spacing: -0.04em; }
+.tile-one {
+  background: linear-gradient(140deg, var(--st-lime-top) 0%, var(--ib-lime) 100%);
+  color: var(--ib-ink);
+  transform: translate(-10%, -14%) rotate(-9deg);
+  z-index: 3;
+}
+.tile-two {
+  background: linear-gradient(140deg, var(--st-dark-3) 0%, var(--st-dark-2) 100%);
+  color: var(--ib-stage-text);
+  transform: translate(8%, 6%) rotate(6deg);
+  z-index: 2;
+}
+.tile-three {
+  background: linear-gradient(140deg, var(--ib-stage-bg-1) 0%, var(--st-dark-1) 100%);
+  color: var(--ib-stage-muted);
+  transform: translate(20%, 22%) rotate(15deg);
+  z-index: 1;
+}
+.open .tile-one { transform: translate(-28%, -28%) rotate(-14deg); }
+.open .tile-two { transform: translate(0%, 0%) rotate(0deg); }
+.open .tile-three { transform: translate(28%, 28%) rotate(14deg); }
+
+.lodge-card {
+  width: min(88%, 340px);
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--ib-line-strong);
+  background: var(--st-card-bg);
+  box-shadow: 0 20px 40px -16px rgba(18, 36, 26, 0.22);
+  font-variant-numeric: tabular-nums;
+}
+.lodge-roof {
+  height: 92px;
+  background: var(--roof-tone, var(--st-spruce));
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 14px 18px;
+  color: var(--st-card-bg);
+  transition: background 0.3s ease;
+}
+.lodge-roof span { font-size: 10.5px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.lodge-body {
+  padding: 16px 18px;
+  border-top: 6px solid var(--deck-tone, var(--ib-brass));
+  transition: border-color 0.3s ease;
+}
+.lodge-body strong { display: block; font: 400 30px Georgia, serif; letter-spacing: -0.04em; color: var(--ib-ink); }
+.lodge-body small { font-size: 12.5px; color: var(--ib-ink-muted); font-weight: 600; }
+
+.study-note { margin-top: 16px; font-size: 15px; line-height: 1.6; color: var(--ib-ink-muted); max-width: 72ch; }
+.handoff-box {
+  padding: 28px 32px;
+  border-radius: 20px;
+  background: var(--ib-surface, var(--st-card-bg));
+  border: 1px solid var(--line);
+  box-shadow: var(--ib-shadow-sm);
+}
+.handoff-box h2 { margin-bottom: 16px; }
+.handoff-box p { font-size: 15.5px; line-height: 1.6; color: var(--ib-ink-muted); max-width: 72ch; margin-bottom: 14px; }
+@media (max-width: 760px) {
+  .study-stage { grid-template-columns: 1fr; padding: 22px; }
+  .handoff-box { padding: 22px; }
+}

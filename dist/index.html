@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Find a stay that fits everyone's lodging budget."><meta name="theme-color" content="#0f221b">
+<title>InBudget — A stay for everyone</title><link rel="stylesheet" href="/tokens.css"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/studio.css"><link rel="stylesheet" href="/journey.css"><script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js","three/addons/":"/vendor/three/addons/"}}</script>
+<script>try{const saved=JSON.parse(localStorage.getItem('inbudget-local-v1'));if(/[?&]round=/.test(location.search)||(saved&&saved.quotes&&!saved.demo))document.documentElement.classList.add('custom-round')}catch{}</script></head>
+<body><a class="skip" href="#main">Skip to content</a>
+<header class="top wrap"><a class="brand" href="/" aria-label="InBudget home"><span class="mark" aria-hidden="true"></span>inbudget<span class="dot">.</span></a><nav aria-label="Main"><span class="nav-pill">Private budget check</span><a href="/studies/">Design studies</a><button class="outline" data-open="host">Create a round <span class="arrow" aria-hidden="true"></span></button></nav></header>
+<main id="main" tabindex="-1">
+<section class="story" id="story" data-od-id="hero-stage" aria-labelledby="headline">
+<div class="studio">
+<div class="studio-layout wrap">
+<div class="studio-copy">
+<p class="eyebrow"><span class="spark"></span> The group stay decision</p>
+<h1 id="headline" tabindex="-1">Find the stay<br><em>everyone can</em><br>say yes to.</h1>
+<p class="deck">Three quotes. One private answer per traveler. A shortlist that fits the whole group—without anyone sharing their number.</p>
+<ul class="trust-pills" aria-label="How InBudget works"><li>Private limits</li><li>Exact 1¢ split</li><li>Instant consensus</li></ul>
+<div class="studio-actions"><button class="primary" id="studio-respond">Try the final response <span class="arrow" aria-hidden="true"></span></button><button class="outline" data-open="host">Create a round</button><button class="outline" id="studio-share" type="button" hidden>Copy invite link</button><button class="outline" id="studio-reset" type="button" hidden>Reset example</button></div>
+<div class="studio-verdict" id="studio-verdict" role="status" aria-live="polite" hidden></div>
+<p class="studio-caption" id="studio-caption" aria-live="polite">Choose a stay to inspect its price.</p>
+</div>
+<div class="stage">
+<div class="stage-header"><span><i></i> ASHEVILLE SHORTLIST</span><span class="stage-meta"><em id="stage-trip">Oct 15–Oct 18 · 3n</em><b id="scene-count">3 / 4 RESPONDED</b></span></div>
+<div class="scene" id="scene" aria-hidden="true"><canvas id="lodge-canvas"></canvas>
+<div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><span class="orbit-hint" id="orbit-hint" hidden><i aria-hidden="true"></i> Auto-orbiting 360°</span>
+<div class="ticket ticket-back"><div class="ticket-image"></div><div class="ticket-edge"><span>03</span><span>THE LAUREL LODGE</span></div></div>
+<div class="ticket ticket-mid"><div class="ticket-image"></div><div class="ticket-edge"><span>02</span><span>RIDGE HOUSE</span></div></div>
+<div class="ticket ticket-front"><div class="ticket-image"></div><div class="ticket-edge"><span id="ticket-index">01</span><span id="ticket-name">FERN HOLLOW CABIN</span></div><div class="ticket-price"><span>PER PERSON</span><strong id="ticket-price">$110.01</strong></div></div>
+</div>
+<div class="stage-controls"><div class="quote-select" id="quote-select" role="group" aria-label="Choose a stay"><button class="plaque prerendered" type="button" aria-pressed="true"><span class="plaque-name">Fern Hollow Cabin</span><strong>$110.01</strong></button><button class="plaque prerendered" type="button" aria-pressed="false"><span class="plaque-name">Ridge House</span><strong>$142.00</strong></button><button class="plaque prerendered" type="button" aria-pressed="false"><span class="plaque-name">The Laurel Lodge</span><strong>$179.00</strong></button></div><div class="stage-detail" id="stage-detail" aria-live="polite"><span class="prerendered">$36.67 / night</span><span class="prerendered">$440.01 total</span><span class="prerendered">One traveler covers the extra 1¢</span><span class="prerendered">Illustrative quote</span></div><div class="stage-tools"><span id="scene-status" role="status">Awaiting responses</span><button id="turn-lodge" type="button" hidden>Next angle ↻</button></div></div>
+</div>
+</div>
+<div class="studio-foot wrap"><a href="#decision">View full comparison ↓</a><button id="replay-opening" type="button" hidden>Replay intro</button><span id="story-stage">01 / INSPECT THE QUOTES</span></div>
+</div>
+</section>
+<section class="decision wrap" id="decision" data-od-id="shortlist-comparison" aria-labelledby="decision-title">
+<div class="intro"><div><p class="eyebrow"><span class="spark"></span> Interactive example</p><h2 id="decision-title" tabindex="-1">The Asheville shortlist</h2><p class="trip">Oct 15–Oct 18 · 3 nights · 4 travelers</p></div><div class="progressbox"><div class="pips" id="pips" aria-hidden="true"><span class="on"></span><span class="on"></span><span class="on"></span><span></span></div><p id="progress" role="status">3 of 4 responded</p><p id="who" class="who" hidden></p></div></div>
+<p id="band" class="band" hidden></p><p id="personal" class="personal" hidden></p>
+<div class="price-track" id="price-track" role="group" aria-label="Price spectrum across stays"><div class="track-rail" aria-hidden="true"><span class="track-zone"></span></div><div class="track-stops"><button type="button" class="track-stop prerendered" aria-pressed="true" style="--pos:0%"><strong>$110.01</strong><span>Fern Hollow Cabin</span></button><button type="button" class="track-stop prerendered" aria-pressed="false" style="--pos:46.37%"><strong>$142.00</strong><span>Ridge House</span></button><button type="button" class="track-stop prerendered" aria-pressed="false" style="--pos:100%"><strong>$179.00</strong><span>The Laurel Lodge</span></button></div></div>
+<div id="quotes" class="quotes"><article class="quote prerendered" data-index="0" aria-current="true"><header><h3>Fern Hollow Cabin</h3><span class="badge">Awaiting responses</span></header><p class="price">$110.01<span> / person · $36.67/night</span></p><div class="quote-foot"><span>$440.01 total</span><span>One traveler covers the extra 1¢</span><span>Illustrative quote</span></div><button class="quote-action" type="button">Inspect Fern Hollow Cabin</button></article><article class="quote prerendered" data-index="1" aria-current="false"><header><h3>Ridge House</h3><span class="badge">Awaiting responses</span></header><p class="price">$142.00<span> / person · $47.33/night</span></p><div class="quote-foot"><span>$568.00 total</span><span>Illustrative quote</span></div><button class="quote-action" type="button">Inspect Ridge House</button></article><article class="quote prerendered" data-index="2" aria-current="false"><header><h3>The Laurel Lodge</h3><span class="badge">Awaiting responses</span></header><p class="price">$179.00<span> / person · $59.67/night</span></p><div class="quote-foot"><span>$716.00 total</span><span>Illustrative quote</span></div><button class="quote-action" type="button">Inspect The Laurel Lodge</button></article></div>
+<div class="decision-footer"><p id="round-note">Three example travelers have already answered. Your limit is the fourth, and it decides which stays fit.</p><div><button class="outline" id="copy-summary" type="button" hidden>Copy summary</button><button class="outline" id="reset" hidden>Reset example</button> <button class="primary" id="respond">Try the final response</button></div></div>
+</section>
+</main>
+<footer class="wrap footer"><a class="brand" href="/"><span class="mark" aria-hidden="true"></span>inbudget<span class="dot">.</span></a><span>Frontend preview · rounds stay on this device</span><span class="credits">3D PBR models &amp; sky from <a href="https://tevy.dev/models" rel="noopener">tevy</a> (CC0 1.0) · ground textures from <a href="https://polyhaven.com/textures" rel="noopener">Poly Haven</a> (CC0)</span><a href="/studies/">Design studies</a></footer>
+<dialog id="guest" aria-labelledby="guest-title"><form id="guest-form"><button type="button" class="close" aria-label="Close" data-close>×</button><p class="eyebrow">Example round</p><h2 id="guest-title">Your lodging limit</h2><p id="guest-lead">Type a limit, or choose a stay to cover its share. The list updates immediately.</p><label id="name-label" for="traveler-name" hidden>Your name, shown to the group<input id="traveler-name" maxlength="40" autocomplete="nickname" placeholder="Alex"></label><label for="limit">Maximum you’d spend for the whole stay (USD)</label><div class="money"><span aria-hidden="true">$</span><input required type="number" id="limit" min="0" max="999999" step=".01" placeholder="150" inputmode="decimal" autocomplete="off"></div><div class="limit-slider-wrap"><input type="range" id="limit-slider" min="80" max="220" step="1" aria-label="Slide to adjust your lodging limit"><span class="limit-nightly" id="limit-nightly"></span></div><p id="guest-summary" role="status"></p><div id="guest-fits" class="fit-list" role="group" aria-label="Stays at this limit"></div><p class="fine" id="guest-fine">Your dollar amount stays on this device. Everyone else only sees which stays fit.</p><button type="submit" class="primary">Submit final response</button></form></dialog>
+<dialog id="host" aria-labelledby="host-title"><form id="host-form"><button type="button" class="close" aria-label="Close" data-close>×</button><p class="eyebrow">Local round preview</p><h2 id="host-title">Compare your stays</h2><p>Use quotes for the same dates and number of travelers. Include mandatory taxes and fees. A stay fits when every traveler can cover its per-person share.</p><div class="fieldgrid"><label>Trip name<input name="title" required maxlength="80" placeholder="Weekend in Asheville"></label><label>Paying travelers<input name="payers" type="number" min="3" max="8" value="4" required></label><label>Check in<input name="start" type="date" required></label><label>Check out<input name="end" type="date" required></label></div><p class="host-summary" id="host-summary" role="status"></p><div id="host-quotes"></div><button type="button" id="add" class="outline">+ Add quote</button><p class="fine">This preview saves the round in this browser. Guest sharing requires a server.</p><p id="form-error" role="alert"></p><button class="primary" type="submit">Save local comparison</button></form></dialog>
+<dialog id="opening" aria-labelledby="opening-title">
+<div class="opening-shell">
+  <div class="opening-glow" aria-hidden="true"></div>
+  <header class="opening-top">
+    <span class="opening-brand"><span class="opening-mark" aria-hidden="true"></span>inbudget<em>.</em></span>
+    <span class="opening-meta">OCT 15–18 · 3 NIGHTS · 4 TRAVELERS</span>
+    <button type="button" id="opening-skip">Enter shortlist <span aria-hidden="true">↓</span></button>
+  </header>
+  <div class="opening-copy">
+    <p class="opening-kicker"><i aria-hidden="true"></i> THE ASHEVILLE SHORTLIST</p>
+    <h2 id="opening-title">One trip.<br><em>Three ways to stay.</em></h2>
+    <p class="opening-deck">Every traveler sets a private cap. Only the stays everyone can cover rise to the top.</p>
+  </div>
+  <div id="opening-art" aria-hidden="true"></div>
+  <div class="opening-prices" role="group" aria-label="Preview a stay">
+    <button type="button" class="opening-card current" data-pick="0"><small>01 · A-Frame &amp; Pines</small><span>Fern Hollow Cabin</span><strong>$110.01 <em>/ person</em></strong></button>
+    <button type="button" class="opening-card" data-pick="1"><small>02 · Nordic Porch</small><span>Ridge House</span><strong>$142.00 <em>/ person</em></strong></button>
+    <button type="button" class="opening-card" data-pick="2"><small>03 · Stone &amp; Timber</small><span>The Laurel Lodge</span><strong>$179.00 <em>/ person</em></strong></button>
+  </div>
+  <footer class="opening-foot">
+    <span id="opening-step">01 · ARRIVING IN ASHEVILLE</span>
+    <div class="opening-meter" aria-hidden="true"><span>01</span><span class="opening-progress"></span><span>03</span></div>
+  </footer>
+</div></dialog>
+<script type="module" src="/app.js"></script></body></html>
