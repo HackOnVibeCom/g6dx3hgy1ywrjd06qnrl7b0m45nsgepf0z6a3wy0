@@ -32,16 +32,21 @@ function save() {
   } catch { return false; }
 }
 
-const server = { ready: null };
+const server = { ready: null, shared: false };
 function serverReady() {
   if (!server.ready) {
     server.ready = fetch('/api/health')
       .then(async response => {
-        if (!response.ok) return false;
         const data = await response.json().catch(() => null);
-        return data?.ok === true;
+        server.shared ||= typeof data?.ok === 'boolean';
+        if (data?.staySearch) configureStaySearch(data.staySearch);
+        return response.ok && data?.ok === true;
       })
-      .catch(() => false);
+      .catch(() => false)
+      .then(ready => {
+        if (!ready && server.shared) server.ready = null;
+        return ready;
+      });
   }
   return server.ready;
 }
@@ -162,7 +167,8 @@ function answered() {
   return remote ? remote.count : round.responses.length;
 }
 function applyRemote(payload, hostKey) {
-  round = { title: payload.title, start: payload.start, end: payload.end, payers: payload.payers, quotes: payload.quotes, demo: false };
+  round = { title: payload.title, start: payload.start, end: payload.end, payers: payload.payers,
+    quotes: payload.quotes, destination: payload.destination, radius: payload.radius, demo: false };
   remote = {
     id: payload.id,
     hostKey: hostKey || remote?.hostKey || storedHostKey(payload.id),
@@ -193,6 +199,12 @@ function nightCount(start = round.start, end = round.end) {
 }
 function perPerson(quote) {
   return share(quote.total, round.payers);
+}
+function splitBreakdown({ high, low, highCount, lowCount }) {
+  return `${highCount} × ${money(high)} + ${lowCount} × ${money(low)}`;
+}
+function shareLabel(split) {
+  return split.highCount ? 'max per person' : 'per person';
 }
 function price(quote) {
   return money(perPerson(quote).high);
@@ -338,8 +350,119 @@ function buildSummaryText() {
   const header = `${round.title} (${date(round.start)}–${date(round.end)} · ${nights} ${nights === 1 ? 'night' : 'nights'} · ${round.payers} travelers)`;
   const winners = round.quotes.filter((_, idx) => verdict[idx]);
   if (!winners.length) return `${header} — None of the ${round.quotes.length} stays fit every budget.`;
-  const list = winners.map(q => `${q.name} (${price(q)}/person · ${money(q.total)} total)`).join(', ');
+  const list = winners.map(quote => {
+    const split = perPerson(quote);
+    const shares = split.highCount ? splitBreakdown(split) : `${money(split.high)}/person`;
+    return `${quote.name} (${shares} · ${money(quote.total)} total)`;
+  }).join(', ');
   return `${header} — ${winners.length} of ${round.quotes.length} stays fit everyone: ${list}.`;
+}
+
+function inspectQuote(index) {
+  selectQuote(index);
+  $('.stage').scrollIntoView({ behavior: motion.matches ? 'auto' : 'smooth', block: 'center' });
+  stageSelect.children[index]?.focus({ preventScroll: true });
+}
+
+function quoteStatus(fits) {
+  if (fits === undefined) return 'Awaiting responses';
+  return fits ? 'Fits everyone' : 'Outside group limits';
+}
+
+const viewSwitch = $('.view-switch');
+function setComparisonView(view) {
+  $('#quotes').hidden = view === 'table';
+  $('#comparison-table').hidden = view !== 'table';
+  viewSwitch.querySelectorAll('button').forEach(button => {
+    button.setAttribute('aria-pressed', String(button.dataset.view === view));
+  });
+}
+viewSwitch.hidden = false;
+viewSwitch.querySelectorAll('button').forEach(button => {
+  button.onclick = () => setComparisonView(button.dataset.view);
+});
+
+function renderComparisonTable(quotes) {
+  const table = element('table');
+  table.append(element('caption', '', 'All-in quotes and per-traveler shares'));
+  const columnHeaders = table.createTHead().insertRow();
+  ['Stay', 'Total', 'Max per person', 'Per night¹', 'Group fit'].forEach(label => {
+    const cell = element('th', '', label);
+    cell.scope = 'col';
+    columnHeaders.append(cell);
+  });
+  const rows = table.createTBody();
+  quotes.forEach(quote => {
+    const row = rows.insertRow();
+    const stay = element('th');
+    stay.scope = 'row';
+    const inspect = element('button', 'table-stay', quote.name);
+    inspect.type = 'button';
+    inspect.setAttribute('aria-label', 'Inspect ' + quote.name);
+    inspect.onclick = () => inspectQuote(quote.index);
+    stay.append(inspect);
+    row.append(stay);
+    row.insertCell().textContent = money(quote.total);
+    const split = perPerson(quote);
+    const shareCell = row.insertCell();
+    shareCell.append(element('strong', '', money(split.high)));
+    if (split.highCount) shareCell.append(element('small', '', splitBreakdown(split)));
+    row.insertCell().textContent = perNight(quote);
+    const status = element('span', 'badge', quoteStatus(quote.fits));
+    if (quote.fits) status.classList.add('table-fit');
+    row.insertCell().append(status);
+  });
+  const scroll = element('div', 'table-scroll');
+  scroll.tabIndex = 0;
+  scroll.setAttribute('role', 'region');
+  scroll.setAttribute('aria-label', 'Stay comparison table');
+  scroll.append(table);
+  $('#comparison-table').replaceChildren(scroll, element('p', 'fine table-note', '¹ Per traveler, based on the higher share when a split is uneven.'));
+}
+
+function renderResults(verdict, quotes, count) {
+  const detail = $('#result-detail');
+  const state = $('#results-nav-state');
+  const panel = $('#round-results');
+  $('#copy-summary').hidden = !verdict;
+  $('#new-round').hidden = !verdict;
+  state.textContent = verdict ? 'Ready' : 'Pending';
+  $('#results-nav').dataset.ready = String(Boolean(verdict));
+  panel.dataset.state = verdict ? 'ready' : 'pending';
+  if (!verdict) {
+    const remaining = round.payers - count;
+    detail.replaceChildren(element('p', '', `Waiting for ${remaining} more ${remaining === 1 ? 'response' : 'responses'} before revealing which stays fit everyone.`));
+    return;
+  }
+
+  const fits = quotes.filter(quote => quote.fits);
+  if (!fits.length) {
+    const lowest = Math.min(...quotes.map(quote => perPerson(quote).high));
+    detail.replaceChildren(
+      element('p', 'result-label', 'No stays fit everyone'),
+      element('p', '', `For the next comparison, look for an all-in quote under ${money(lowest)} per traveler. A lower price may still be needed.`)
+    );
+    return;
+  }
+
+  const cheapest = fits[0];
+  const recommendation = element('div', 'result-recommendation');
+  recommendation.append(
+    element('p', 'result-label', 'Lowest-priced stay that fits everyone'),
+    element('h4', '', cheapest.name),
+    element('p', 'result-price', `${price(cheapest)} ${shareLabel(perPerson(cheapest))} · ${money(cheapest.total)} total`)
+  );
+  const savings = fits.at(-1).total - cheapest.total;
+  if (savings > 0) recommendation.append(element('p', 'fine', `${money(savings)} less for the group than the highest-priced stay that fits.`));
+  if (cheapest.url && /^https?:\/\//i.test(cheapest.url)) {
+    const listing = element('a', 'result-link', 'Check the original listing ↗');
+    listing.href = cheapest.url;
+    listing.target = '_blank';
+    listing.rel = 'noopener noreferrer';
+    recommendation.append(listing);
+  }
+  const label = quotes.length === 1 ? 'This stay fits everyone.' : `${fits.length} of ${quotes.length} stays fit everyone.`;
+  detail.replaceChildren(element('p', '', label), recommendation);
 }
 
 function render(animate = false) {
@@ -348,7 +471,8 @@ function render(animate = false) {
   const count = answered();
   $('#decision-title').textContent = round.title;
   const nights = nightCount();
-  $('.trip').textContent = date(round.start) + '–' + date(round.end) + ' · ' + nights + (nights === 1 ? ' night' : ' nights') + ' · ' + round.payers + ' travelers';
+  const where = round.destination ? round.destination + (round.radius ? ' · ' + round.radius + ' mi radius' : '') + ' · ' : '';
+  $('.trip').textContent = where + date(round.start) + '–' + date(round.end) + ' · ' + nights + (nights === 1 ? ' night' : ' nights') + ' · ' + round.payers + ' travelers';
   $('.intro .eyebrow').lastChild.textContent = round.demo ? ' Interactive example' : remote ? ' Shared round' : ' Local comparison';
   $('#progress').textContent = count + ' of ' + round.payers + ' responded' + (verdict ? ' · Complete' : '');
   const who = $('#who');
@@ -365,14 +489,13 @@ function render(animate = false) {
     card.dataset.index = quote.index;
     card.setAttribute('aria-current', String(quote.index === activeQuote));
     const heading = element('header');
-    const state = verdict ? quote.fits ? 'Fits everyone' : 'Outside group limits' : 'Awaiting responses';
-    heading.append(element('h3', '', quote.name), element('span', 'badge', state));
-    const amount = element('p', 'price', price(quote));
-    amount.append(element('span', '', ' / person · ' + perNight(quote) + '/night'));
+    heading.append(element('h3', '', quote.name), element('span', 'badge', quoteStatus(quote.fits)));
+    const split = perPerson(quote);
+    const amount = element('p', 'price', money(split.high));
+    amount.append(element('span', '', ' ' + shareLabel(split) + ' · ' + perNight(quote) + '/night'));
     const details = element('div', 'quote-foot');
     details.append(element('span', '', money(quote.total) + ' total'));
-    const split = perPerson(quote);
-    if (split.low !== split.high) details.append(element('span', '', 'One traveler covers the extra 1¢'));
+    if (split.highCount) details.append(element('span', '', splitBreakdown(split)));
     const mine = knownLimit();
     if (mine !== null) {
       const over = split.high - mine;
@@ -388,14 +511,12 @@ function render(animate = false) {
     } else details.append(element('span', '', 'Illustrative quote'));
     const inspect = element('button', 'quote-action', 'Inspect ' + quote.name);
     inspect.type = 'button';
-    inspect.onclick = () => {
-      selectQuote(quote.index);
-      $('.stage')?.scrollIntoView({ behavior: motion.matches ? 'auto' : 'smooth', block: 'center' });
-      document.querySelector('#quote-select button[aria-pressed=true]')?.focus({ preventScroll: true });
-    };
+    inspect.onclick = () => inspectQuote(quote.index);
     card.append(heading, amount, details, inspect);
     return card;
   }));
+  renderComparisonTable(order);
+  renderResults(verdict, order, count);
   if (animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     for (const card of $('#quotes').children) {
       const previous = existing.get(Number(card.dataset.index));
@@ -407,10 +528,8 @@ function render(animate = false) {
       ], { duration: 420, easing: 'cubic-bezier(.2,.75,.25,1)' });
     }
   }
-  const fits = verdict?.filter(Boolean).length;
   $('#round-note').textContent = verdict
-    ? fits === 0 ? 'None of these stays fit everyone. Try a cheaper quote in a fresh round.'
-      : (fits === order.length ? 'Every option fits. ' : fits + ' of ' + order.length + ' options fit everyone. ') + 'Recheck price and availability before booking.'
+    ? 'Everyone has responded. Open the group results to review the decision.'
     : remote ? (remote.hostKey ? 'Send the invite below. Each traveler answers on their own device.' : 'Answer on this device. The group only sees which stays fit.')
     : round.demo ? 'Three example travelers have already answered. Your limit is the fourth, and it decides which stays fit.' : 'This local preview collects each response on this device.';
   $('#respond').hidden = !canAnswer();
@@ -425,11 +544,8 @@ function render(animate = false) {
     studioReset.hidden = hideReset;
     studioReset.textContent = resetText;
   }
-  const copySummaryBtn = $('#copy-summary');
-  if (copySummaryBtn) copySummaryBtn.hidden = !verdict;
   const studioShare = $('#studio-share');
   if (studioShare) studioShare.hidden = !remote?.hostKey;
-  shareButton.hidden = !remote?.hostKey;
   deleteButton.hidden = !remote?.hostKey;
   if (remote?.hostKey) {
     const url = location.origin + location.pathname + '?round=' + encodeURIComponent(remote.id);
@@ -442,6 +558,7 @@ function render(animate = false) {
     const link = element('a', 'invite-link', url);
     link.href = url;
     const inlineCopy = element('button', 'outline invite-copy', 'Copy link');
+    inlineCopy.id = 'share';
     inlineCopy.type = 'button';
     inlineCopy.onclick = () => copyInviteLink(inlineCopy, 'Copy link');
     linkRow.append(link, inlineCopy);
@@ -496,10 +613,197 @@ function updateQuotes() {
     const total = cents(field.querySelector('[name=quote-total]').value);
     const info = total !== null && n >= 3 && n <= 8 && Number.isInteger(n) ? share(total, n) : null;
     const nightly = info && nights ? ' · ' + money(Math.round(info.high / nights)) + '/night' : '';
-    field.querySelector('[data-share]').textContent = info ? money(info.high) + ' per person' + nightly + (info.low === info.high ? '' : ' · one traveler covers the extra 1¢') : '';
+    field.querySelector('[data-share]').textContent = info ? money(info.high) + ' ' + shareLabel(info) + nightly + (info.highCount ? ' · ' + splitBreakdown(info) : '') : '';
   });
   $('#add').hidden = quoteFields.children.length === 3;
+  const fields = [...quoteFields.children];
+  const filled = fields.filter(field => !emptyQuote(field));
+  fields.forEach((field, index) => {
+    const required = filled.length ? !emptyQuote(field) : index === 0;
+    field.querySelectorAll('input').forEach(input => { input.required = required; });
+  });
+  const missing = filled.flatMap((field) => {
+    const amount = cents(field.querySelector('[name=quote-total]').value);
+    if (amount > 0) return [];
+    return [field.querySelector('[name=quote-name]').value.trim() || field.querySelector('legend').textContent];
+  });
+  $('#quote-review').textContent = `${filled.length} of 3 shortlist slots filled.` +
+    (missing.length ? ' All-in total needed for ' + missing.join(', ') + '.' : '');
+  const empty = fields.some(emptyQuote);
+  $('#stay-search-results').querySelectorAll('button').forEach(button => {
+    const added = fields.some(field => field.querySelector('[name=quote-url]').value === button.dataset.url);
+    button.textContent = added ? 'Added' : !empty && fields.length >= 3 ? 'Shortlist full' : 'Add to shortlist';
+    button.disabled = added || (!empty && fields.length >= 3);
+  });
 }
+
+function emptyQuote(field) {
+  return ['name', 'total', 'url'].every(key => !field.querySelector('[name=quote-' + key + ']').value.trim());
+}
+
+const searchButton = $('#search-stays');
+const searchStatus = $('#stay-search-status');
+const searchResults = $('#stay-search-results');
+const searchCenter = $('#stay-center');
+const destinationInput = $('#stay-destination');
+const findDestination = $('#find-destination');
+const destinationMatches = $('#destination-matches');
+const destinationStatus = $('#destination-status');
+let staySearchMode;
+let searchVersion = 0;
+let destinationVersion = 0;
+let selectedDestination = null;
+let previousDestination = null;
+function configureStaySearch(mode) {
+  staySearchMode = mode;
+  $('#stay-search').hidden = false;
+  if (mode !== 'sandbox') {
+    $('#stay-center-label').hidden = false;
+    findDestination.hidden = false;
+    searchButton.textContent = 'Find stays';
+    $('#stay-search-attribution').hidden = false;
+    $('#stay-search-note').textContent = mode === 'map'
+      ? 'Find real mapped lodging near your destination. Check availability and enter the all-in price before saving.'
+      : 'Add a state or country to narrow the destination. Verify each all-in price on the original listing before saving.';
+  }
+}
+function resetDestinationChoice() {
+  destinationVersion += 1;
+  selectedDestination = null;
+  previousDestination = null;
+  findDestination.disabled = false;
+  destinationMatches.replaceChildren();
+  destinationMatches.hidden = true;
+  destinationStatus.textContent = '';
+}
+destinationInput.addEventListener('input', resetDestinationChoice);
+searchCenter.addEventListener('input', resetDestinationChoice);
+findDestination.onclick = async () => {
+  const location = destinationInput.value.trim();
+  resetDestinationChoice();
+  clearStaySearch();
+  if (!location) {
+    destinationStatus.textContent = 'Enter a destination.';
+    destinationInput.focus();
+    return;
+  }
+  const version = destinationVersion;
+  findDestination.disabled = true;
+  destinationStatus.textContent = 'Finding destinations…';
+  try {
+    const { locations } = await api('/stays/locations', {
+      method: 'POST', body: JSON.stringify({ location }),
+    });
+    if (version !== destinationVersion) return;
+    destinationStatus.textContent = locations.length
+      ? 'Choose a destination below.'
+      : 'No destinations found. Add a state or country, or enter coordinates.';
+    destinationMatches.replaceChildren(...locations.map(match => {
+      const button = element('button', 'outline', match.label);
+      button.type = 'button';
+      button.setAttribute('aria-pressed', 'false');
+      button.onclick = () => {
+        searchCenter.value = '';
+        selectedDestination = match;
+        destinationMatches.querySelectorAll('button').forEach(option => {
+          option.setAttribute('aria-pressed', String(option === button));
+        });
+        clearStaySearch();
+        destinationStatus.textContent = 'Selected: ' + match.label;
+      };
+      return button;
+    }));
+    destinationMatches.hidden = locations.length === 0;
+  } catch (error) {
+    if (version === destinationVersion) destinationStatus.textContent = error.message;
+  } finally {
+    if (version === destinationVersion) findDestination.disabled = false;
+  }
+};
+function clearStaySearch() {
+  searchVersion += 1;
+  searchButton.disabled = false;
+  searchStatus.textContent = '';
+  searchResults.replaceChildren();
+}
+host.querySelectorAll('#stay-destination, #stay-radius, #stay-center, [name=start], [name=end], [name=payers]').forEach(input => {
+  input.addEventListener('input', clearStaySearch);
+});
+searchButton.onclick = async () => {
+  const location = destinationInput.value.trim();
+  if (!location) {
+    searchStatus.textContent = 'Enter a destination.';
+    $('#stay-destination').focus();
+    return;
+  }
+  const start = host.querySelector('[name=start]').value;
+  const end = host.querySelector('[name=end]').value;
+  if (staySearchMode !== 'map' && (!start || !end || end <= start)) {
+    searchStatus.textContent = 'Choose check-in and check-out dates.';
+    return;
+  }
+  const adults = Number(host.querySelector('[name=payers]').value);
+  const radius = Number($('#stay-radius').value);
+  const sandbox = staySearchMode === 'sandbox';
+  const mapped = staySearchMode === 'map';
+  const center = searchCenter.value.trim() || selectedDestination?.center || '';
+  if (!sandbox && !center) {
+    searchStatus.textContent = 'Choose a destination match or enter coordinates first.';
+    findDestination.focus();
+    return;
+  }
+  const version = ++searchVersion;
+  searchResults.replaceChildren();
+  searchButton.disabled = true;
+  searchStatus.textContent = staySearchMode === 'live' ? 'Searching live listings. This can take a few minutes.' : 'Searching for stays…';
+  try {
+    const { stays, place } = await api('/stays/search', {
+      method: 'POST', body: JSON.stringify({ location: selectedDestination?.label || location, start, end, adults, radius, center }),
+    });
+    if (version !== searchVersion) return;
+    const kind = sandbox ? 'sample ' : '';
+    searchStatus.textContent = stays.length
+      ? `${stays.length} ${kind}${stays.length === 1 ? 'stay' : 'stays'} found near ${place || location}.`
+      : `No ${kind}stays found within ${radius} miles of ${place || location}.`;
+    searchResults.replaceChildren(...stays.map(stay => {
+      const item = element('li');
+      const detail = element('div');
+      const rate = stay.total === null
+        ? (mapped ? 'Check rates and availability' : 'No USD price returned')
+        : money(stay.total) + (sandbox ? ' sample total' : ' reported total');
+      detail.append(element('strong', '', stay.name), element('small', '', `${rate} · ${stay.distanceMiles} mi`));
+      if (!sandbox) {
+        const listing = element('a', '', mapped ? 'View on map ↗' : 'Open listing ↗');
+        listing.href = stay.url;
+        listing.target = '_blank';
+        listing.rel = 'noopener noreferrer';
+        detail.append(listing);
+      }
+      const add = element('button', 'outline', 'Add to shortlist');
+      add.type = 'button';
+      add.dataset.url = stay.url;
+      add.onclick = () => {
+        let field = [...quoteFields.children].find(emptyQuote);
+        if (!field && quoteFields.children.length < 3) {
+          addQuote();
+          field = quoteFields.lastElementChild;
+        }
+        if (!field) return;
+        field.querySelector('[name=quote-name]').value = stay.name;
+        if (sandbox) field.querySelector('[name=quote-total]').value = (stay.total / 100).toFixed(2);
+        field.querySelector('[name=quote-url]').value = stay.url;
+        updateQuotes();
+      };
+      item.append(detail, add);
+      return item;
+    }));
+    updateQuotes();
+  } catch (error) {
+    if (version === searchVersion) searchStatus.textContent = error.message;
+  } finally {
+    if (version === searchVersion) searchButton.disabled = false;
+  }
+};
 
 function seedHostDates() {
   const startInput = host.querySelector('[name=start]');
@@ -513,7 +817,29 @@ function seedHostDates() {
   startInput.value = iso(start);
   endInput.value = iso(end);
 }
-document.querySelectorAll('[data-open=host]').forEach(button => button.onclick = () => { seedHostDates(); updateQuotes(); host.showModal(); });
+document.querySelectorAll('[data-open=host]').forEach(button => button.onclick = () => {
+  if (button.id === 'new-round') {
+    for (const field of ['title', 'payers', 'start', 'end']) {
+      host.querySelector('[name=' + field + ']').value = round[field];
+    }
+    quoteFields.replaceChildren();
+    addQuote();
+    resetDestinationChoice();
+    previousDestination = round.destination || null;
+    destinationInput.value = previousDestination || '';
+    $('#stay-radius').value = String(round.radius ?? 25);
+    if (!$('#stay-radius').value) {
+      $('#stay-radius').add(new Option(`${round.radius} miles`, String(round.radius)));
+      $('#stay-radius').value = String(round.radius);
+    }
+    searchCenter.value = '';
+    clearStaySearch();
+  }
+  $('#form-error').textContent = '';
+  seedHostDates();
+  updateQuotes();
+  host.showModal();
+});
 document.querySelectorAll('[data-close]').forEach(button => button.onclick = () => button.closest('dialog').close());
 $('#add').onclick = addQuote;
 $('#host-form').addEventListener('input', updateQuotes);
@@ -523,23 +849,40 @@ $('#host-form').addEventListener('submit', async event => {
   const error = $('#form-error');
   const start = data.get('start'), end = data.get('end');
   if (end <= start) { error.textContent = 'Check-out must be after check-in.'; return; }
-  const quotes = [...quoteFields.children].map(field => {
+  const quotes = [...quoteFields.children].filter(field => !emptyQuote(field)).map(field => {
     const get = name => field.querySelector('[name=quote-' + name + ']').value;
     return { name: get('name').trim(), total: cents(get('total')), url: get('url'), checked: new Date(get('checked')).toISOString() };
   });
-  if (!data.get('title').trim() || quotes.some(q => !q.name || !q.total || !/^https?:\/\//i.test(q.url))) {
+  if (!data.get('title').trim() || !quotes.length || quotes.some(q => !q.name || !q.total || !/^https?:\/\//i.test(q.url))) {
     error.textContent = 'Enter a trip name and complete quotes with HTTP or HTTPS listing links.';
     return;
   }
-  error.textContent = '';
-  activeQuote = 0;
-  const payload = { title: data.get('title').trim(), start, end, payers: Number(data.get('payers')), quotes };
-  let created = null;
-  let createError = '';
-  if (await serverReady()) {
-    try { created = await api('/rounds', { method: 'POST', body: JSON.stringify(payload) }); }
-    catch (error) { createError = error.message; }
+  if (new Set(quotes.map(quote => new URL(quote.url).href)).size !== quotes.length) {
+    error.textContent = 'Use each listing link only once.';
+    return;
   }
+  error.textContent = '';
+  const destination = selectedDestination?.label || previousDestination || (searchCenter.value.trim() && destinationInput.value.trim());
+  const payload = { title: data.get('title').trim(), start, end, payers: Number(data.get('payers')), quotes,
+    ...(destination ? { destination, radius: Number($('#stay-radius').value) } : {}) };
+  const submit = event.currentTarget.querySelector('button[type=submit]');
+  if (submit.disabled) return;
+  submit.disabled = true;
+  let created;
+  try {
+    if (await serverReady()) {
+      created = await api('/rounds', { method: 'POST', body: JSON.stringify(payload) });
+    } else if (server.shared) {
+      error.textContent = 'Shared rounds are temporarily unavailable. Your quotes are still here. Try again shortly.';
+      return;
+    }
+  } catch (failure) {
+    error.textContent = failure.message;
+    return;
+  } finally {
+    submit.disabled = false;
+  }
+  activeQuote = 0;
   if (created) {
     applyRemote(created.round, created.hostKey);
     history.replaceState(null, '', '?round=' + encodeURIComponent(created.id));
@@ -557,7 +900,6 @@ $('#host-form').addEventListener('submit', async event => {
   host.close();
   render();
   if (!stored) $('#round-note').textContent += ' Browser storage is unavailable. Keep this tab open.';
-  if (createError) $('#round-note').textContent = createError + ' Saved on this device only.';
   $('#decision-title').focus();
 });
 
@@ -579,7 +921,8 @@ function paintLimit(raw, syncSlider = true) {
   }
   const covered = [];
   $('#guest-fits').replaceChildren(...round.quotes.map(quote => {
-    const need = perPerson(quote).high;
+    const split = perPerson(quote);
+    const need = split.high;
     const within = limit !== null && need <= limit;
     if (within) covered.push(quote.name);
     const row = element('button', 'fit-row' + (within ? ' yes' : ''));
@@ -588,7 +931,7 @@ function paintLimit(raw, syncSlider = true) {
     const state = within ? 'Within your limit' : limit === null ? 'Set this amount' : money(need - limit) + ' short';
     row.append(
       element('span', 'fit-name', quote.name),
-      element('span', 'fit-need', money(need) + ' per person · ' + perNight(quote) + '/night'),
+      element('span', 'fit-need', money(need) + ' ' + shareLabel(split) + ' · ' + perNight(quote) + '/night'),
       element('span', 'fit-state', state)
     );
     row.onclick = () => {
@@ -615,7 +958,7 @@ $('#respond').onclick = () => {
     : 'Local response ' + (answered() + 1) + ' of ' + round.payers;
   $('#guest-form button[type=submit]').textContent = revising ? (round.demo ? 'Update example' : 'Update my answer') : 'Submit final response';
   $('#guest-fine').textContent = remote
-    ? 'Your name is visible to the group. Your dollar amount stays on this device.'
+    ? 'Your name is visible to the group. Your dollar amount stays on this device. The server receives which stays fit your budget and shares only the group verdict.'
     : 'Your dollar amount stays in this browser. The shortlist shows which stays fit.';
   $('#guest-form').reset();
   $('#name-label').hidden = !remote;
@@ -655,37 +998,43 @@ $('#guest-form').addEventListener('submit', async event => {
     $('#traveler-name').reportValidity();
     return;
   }
+  const choice = qualify(round.quotes, round.payers, limit);
   if (remote) {
+    const { id } = remote;
     const submit = event.currentTarget.querySelector('button[type=submit]');
     submit.disabled = true;
     let payload;
     try {
-      payload = await api('/rounds/' + encodeURIComponent(remote.id) + '/responses', {
+      payload = await api('/rounds/' + encodeURIComponent(id) + '/responses', {
         method: 'POST',
-        body: JSON.stringify({ traveler: travelerToken(remote.id), limit, ...(travelerName ? { name: travelerName } : {}) })
+        body: JSON.stringify({ traveler: travelerToken(id), choices: choice, ...(travelerName ? { name: travelerName } : {}) })
       });
     } catch (error) {
-      if (error.status === 409) unmarkAnswered(remote.id);
+      if (remote?.id !== id) return;
+      if (error.status === 404) {
+        leaveDeletedRound(id, missingRoundMessage);
+        return;
+      }
+      if (error.status === 409) unmarkAnswered(id);
       $('#limit').setCustomValidity(error.message);
       $('#limit').reportValidity();
       return;
     } finally {
       submit.disabled = false;
     }
+    if (remote?.id !== id) return;
     applyRemote(payload.round);
-    markAnswered(remote.id);
-    storeLimit(remote.id, limit);
-    storeName(remote.id, travelerName);
+    markAnswered(id);
+    storeLimit(id, limit);
+    storeName(id, travelerName);
     focusBestFit();
     $('#guest-form').reset();
     guest.close();
     render(true);
-    if (journey && fromStudio) $('#studio-respond').focus({ preventScroll: true });
-    else $('#decision-title').focus();
-    fromStudio = false;
+    if (outcome()) $('#results-title').focus();
+    else $('#respond').focus();
     return;
   }
-  const choice = qualify(round.quotes, round.payers, limit);
   if (round.demo && revising) round.responses[round.payers - 1] = choice;
   else round.responses.push(choice);
   if (round.demo) {
@@ -698,9 +1047,8 @@ $('#guest-form').addEventListener('submit', async event => {
   guest.close();
   render(true);
   if (!stored) $('#round-note').textContent += ' Browser storage is unavailable. Keep this tab open.';
-  if (journey && fromStudio) $('#studio-respond').focus({ preventScroll: true });
-  else $('#decision-title').focus();
-  fromStudio = false;
+  if (outcome()) $('#results-title').focus();
+  else $('#respond').focus();
 });
 $('#limit').oninput = event => {
   event.currentTarget.setCustomValidity('');
@@ -717,14 +1065,18 @@ if ($('#limit-slider')) {
 $('#traveler-name').oninput = event => event.currentTarget.setCustomValidity('');
 async function resetCurrentRound(fromHero = false) {
   if (remote) {
-    if (!remote.hostKey) return;
+    const { id, hostKey } = remote;
+    if (!hostKey) return;
     try {
-      const payload = await api('/rounds/' + encodeURIComponent(remote.id) + '/responses', { method: 'DELETE', headers: { 'x-host-key': remote.hostKey } });
+      const payload = await api('/rounds/' + encodeURIComponent(id) + '/responses', { method: 'DELETE', headers: { 'x-host-key': hostKey } });
+      if (remote?.id !== id) return;
       applyRemote(payload.round);
       render();
       (fromHero ? $('#studio-respond') : $('#decision-title')).focus({ preventScroll: fromHero });
     } catch (error) {
-      $('#round-note').textContent = error.message;
+      if (remote?.id !== id) return;
+      if (error.status === 404) leaveDeletedRound(id, missingRoundMessage);
+      else $('#round-note').textContent = error.message;
     }
     return;
   }
@@ -746,6 +1098,7 @@ let scrollFrame = 0;
 function renderStage() {
   activeQuote = Math.min(activeQuote, round.quotes.length - 1);
   const quote = round.quotes[activeQuote];
+  const split = perPerson(quote);
   const verdict = outcome();
   const nights = nightCount();
   const status = verdict ? verdict[activeQuote] ? 'Fits everyone' : 'Outside group limits' : 'Awaiting responses';
@@ -755,13 +1108,14 @@ function renderStage() {
   scene.dataset.verdict = verdict ? verdict[activeQuote] ? 'fit' : 'outside' : 'pending';
   $('#ticket-index').textContent = String(activeQuote + 1).padStart(2, '0');
   $('#ticket-name').textContent = quote.name.toUpperCase();
-  $('#ticket-price').textContent = price(quote);
+  $('#ticket-price').textContent = money(split.high);
+  $('.ticket-price > span').textContent = shareLabel(split).toUpperCase();
   $('#scene-count').textContent = answered() + ' / ' + round.payers + ' RESPONDED';
   const stageTrip = $('#stage-trip');
   if (stageTrip) stageTrip.textContent = date(round.start) + '–' + date(round.end) + ' · ' + nights + 'n';
   $('.stage-header > span').lastChild.textContent = round.demo ? ' ASHEVILLE SHORTLIST' : ' ' + round.title.toUpperCase();
   $('#scene-status').textContent = status;
-  $('#studio-caption').textContent = quote.name + ' · ' + price(quote) + ' per person (' + perNight(quote) + '/night).' + (verdict ? (verdict[activeQuote] ? ' Fits everyone.' : ' Outside the tightest budget.') : '');
+  $('#studio-caption').textContent = quote.name + ' · ' + money(split.high) + ' ' + shareLabel(split) + ' (' + perNight(quote) + '/night).' + (verdict ? (verdict[activeQuote] ? ' Fits everyone.' : ' Outside the tightest budget.') : '');
   labelAction(button, canAnswer() ? answerLabel() : 'View results');
   stageSelect.style.setProperty('--quote-count', String(round.quotes.length));
   stageSelect.replaceChildren(...round.quotes.map((item, index) => {
@@ -782,8 +1136,7 @@ function renderStage() {
       element('span', '', perNight(quote) + ' / night'),
       element('span', '', money(quote.total) + ' total'),
     ];
-    const split = perPerson(quote);
-    if (split.low !== split.high) chips.push(element('span', '', 'One traveler covers the extra 1¢'));
+    if (split.highCount) chips.push(element('span', '', splitBreakdown(split)));
     const mine = knownLimit();
     if (mine !== null) {
       const over = split.high - mine;
@@ -868,46 +1221,56 @@ scene.addEventListener('pointerleave', () => {
   scene.style.setProperty('--turn-x', '0deg');
   scene.style.setProperty('--turn-y', '0deg');
 });
-let fromStudio = false;
-guest.addEventListener('close', () => { fromStudio = false; $('#limit').setCustomValidity(''); $('#traveler-name').setCustomValidity(''); });
+guest.addEventListener('close', () => { $('#limit').setCustomValidity(''); $('#traveler-name').setCustomValidity(''); });
 $('#studio-respond').onclick = () => {
   if (!canAnswer()) {
-    $('#decision').scrollIntoView({ behavior: motion.matches ? 'auto' : 'smooth', block: 'start' });
-    $('#decision-title').focus();
+    $('#results-title').focus();
   } else {
-    fromStudio = true;
     $('#respond').click();
   }
 };
-const shareButton = element('button', 'outline', 'Copy invite link');
-shareButton.id = 'share';
-shareButton.type = 'button';
-shareButton.hidden = true;
-document.querySelector('.decision-footer > div').append(shareButton);
 const deleteButton = element('button', 'outline', 'Delete round');
 deleteButton.id = 'delete-round';
 deleteButton.type = 'button';
 deleteButton.hidden = true;
-document.querySelector('.decision-footer > div').append(deleteButton);
+$('#traveler-responses .round-actions').append(deleteButton);
+
+const missingRoundMessage = 'This shared round is no longer available. Showing the example shortlist.';
+function leaveDeletedRound(id, message) {
+  forgetHost(id);
+  forgetAnswer(id);
+  try {
+    localStorage.removeItem(hostStoreKey(id));
+    localStorage.removeItem(travelerStoreKey(id));
+  } catch {}
+  remote = null;
+  round = structuredClone(demo);
+  privateLimit = null;
+  activeQuote = 0;
+  const url = new URL(location.href);
+  url.searchParams.delete('round');
+  history.replaceState(null, '', url);
+  document.querySelector('.footer > span').textContent = 'Frontend preview · rounds stay on this device';
+  if (guest.open) guest.close();
+  render();
+  if (message) $('#round-note').textContent = message;
+}
+
 deleteButton.onclick = async () => {
   if (!remote?.hostKey) return;
   if (!confirm('Delete this round and every traveler response? This cannot be undone.')) return;
   deleteButton.disabled = true;
+  const { id, hostKey } = remote;
   try {
-    await api('/rounds/' + encodeURIComponent(remote.id), { method: 'DELETE', headers: { 'x-host-key': remote.hostKey } });
-    forgetHost(remote.id);
-    forgetAnswer(remote.id);
-    try { localStorage.removeItem(hostStoreKey(remote.id)); } catch {}
-    remote = null;
-    round = structuredClone(demo);
-    privateLimit = null;
-    activeQuote = 0;
-    history.replaceState(null, '', location.pathname);
-    document.querySelector('.footer > span').textContent = 'Frontend preview · rounds stay on this device';
-    render();
-    $('#decision-title').focus();
+    await api('/rounds/' + encodeURIComponent(id), { method: 'DELETE', headers: { 'x-host-key': hostKey } });
+    if (remote?.id === id) {
+      leaveDeletedRound(id, 'Round deleted. Showing the example shortlist.');
+      $('#decision-title').focus();
+    }
   } catch (error) {
-    $('#round-note').textContent = error.message;
+    if (remote?.id !== id) return;
+    if (error.status === 404) leaveDeletedRound(id, missingRoundMessage);
+    else $('#round-note').textContent = error.message;
   } finally {
     deleteButton.disabled = false;
   }
@@ -915,7 +1278,7 @@ deleteButton.onclick = async () => {
 const invite = element('div', 'invite');
 invite.id = 'invite';
 invite.hidden = true;
-document.querySelector('.decision-footer').after(invite);
+$('#traveler-responses').append(invite);
 const hosted = element('p', 'fine');
 hosted.id = 'hosted';
 hosted.hidden = true;
@@ -931,7 +1294,6 @@ async function copyInviteLink(btn, restoreLabel = 'Copy invite link') {
   }
   setTimeout(() => { btn.textContent = restoreLabel; }, 2400);
 }
-shareButton.onclick = () => copyInviteLink(shareButton, 'Copy invite link');
 if ($('#studio-share')) $('#studio-share').onclick = event => copyInviteLink(event.currentTarget, 'Copy invite link');
 if ($('#copy-summary')) {
   $('#copy-summary').onclick = async event => {
@@ -948,27 +1310,43 @@ if ($('#copy-summary')) {
   };
 }
 
-let sharedError = '';
+let sharedError;
 if (sharedId) {
   try { applyRemote(await api('/rounds/' + encodeURIComponent(sharedId))); }
-  catch (error) {
-    sharedError = error.message;
-    if (error.status === 404) forgetHost(sharedId);
-  }
+  catch (error) { sharedError = error; }
 }
 addQuote();
-render();
-if (sharedError) $('#round-note').textContent = sharedError + ' Showing the example instead.';
-if (await serverReady()) {
-  document.querySelector('#host-form > .fine').textContent = 'This round is saved on the server and can be shared with an invite link.';
+if (sharedError?.status === 404) {
+  leaveDeletedRound(sharedId, missingRoundMessage);
+} else {
+  render();
+  if (sharedError) $('#round-note').textContent = sharedError.message + ' Reload to retry the invite.';
+}
+if (await serverReady() || server.shared) {
+  $('#host-sharing-note').textContent = 'This round is saved on the server and can be shared with an invite link.';
   document.querySelector('#host-form button[type=submit]').textContent = 'Create shared round';
 }
 journey?.start();
 
-setInterval(async () => {
-  if (!remote || document.hidden) return;
+let refreshing = false;
+async function refreshSharedRound() {
+  if (!remote || document.hidden || refreshing) return;
+  const snapshot = remote;
+  refreshing = true;
   try {
-    const payload = await api('/rounds/' + encodeURIComponent(remote.id));
-    if (remoteStamp(payload) !== remote.stamp) { applyRemote(payload); render(true); }
-  } catch {}
-}, 7000);
+    const payload = await api('/rounds/' + encodeURIComponent(snapshot.id));
+    if (remote === snapshot && remoteStamp(payload) !== snapshot.stamp) {
+      applyRemote(payload);
+      render(true);
+    }
+  } catch (error) {
+    if (remote === snapshot && error.status === 404) {
+      leaveDeletedRound(snapshot.id, missingRoundMessage);
+    }
+  } finally {
+    refreshing = false;
+  }
+}
+
+setInterval(refreshSharedRound, 7000);
+document.addEventListener('visibilitychange', refreshSharedRound);

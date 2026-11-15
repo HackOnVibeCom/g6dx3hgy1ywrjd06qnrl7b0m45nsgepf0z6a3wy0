@@ -1,0 +1,27 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npm test",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/dispatch.py": {
+      "excludeFiles": "{dist/**,data/**}"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/health", "destination": "/api/dispatch?inbudget_path=health" },
+    { "source": "/api/rounds", "destination": "/api/dispatch?inbudget_path=rounds" },
+    { "source": "/api/rounds/:id", "destination": "/api/dispatch?inbudget_path=rounds/:id" },
+    { "source": "/api/rounds/:id/responses", "destination": "/api/dispatch?inbudget_path=rounds/:id/responses" },
+    { "source": "/api/stays/:operation(locations|search)", "destination": "/api/dispatch?inbudget_path=stays/:operation" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "same-origin" }
+      ]
+    }
+  ]
+}

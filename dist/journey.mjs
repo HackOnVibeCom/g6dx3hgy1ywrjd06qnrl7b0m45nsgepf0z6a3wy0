@@ -281,7 +281,10 @@ export function mountJourney(onPick) {
     Promise.race([readyPromise, new Promise(resolve => setTimeout(resolve, 1400))]).then(begin);
   }
 
-  button.onclick = () => finish(true);
+  button.onclick = () => {
+    finish(true);
+    document.querySelector('#decision-title')?.focus();
+  };
   host.addEventListener('cancel', event => {
     event.preventDefault();
     finish(true);
@@ -426,7 +429,7 @@ export function mountJourney(onPick) {
         seen = sessionStorage.getItem('inbudget-opening-v1') === 'seen';
         sessionStorage.setItem('inbudget-opening-v1', 'seen');
       } catch {}
-      if (!seen && location.hash !== '#decision') play();
+      if (!seen && !location.hash) play();
       else wake();
     },
   };

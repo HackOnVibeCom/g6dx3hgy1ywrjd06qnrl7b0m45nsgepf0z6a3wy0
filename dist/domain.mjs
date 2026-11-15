@@ -5,7 +5,8 @@ export function cents(value) {
 
 export function share(total, payers) {
   const low = Math.floor(total / payers);
-  return { low, high: low + Number(total % payers !== 0) };
+  const highCount = total % payers;
+  return { low, high: low + Number(highCount !== 0), lowCount: payers - highCount, highCount };
 }
 
 export function qualify(quotes, payers, ceiling) {

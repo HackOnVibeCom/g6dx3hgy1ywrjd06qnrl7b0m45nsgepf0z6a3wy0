@@ -4,10 +4,12 @@ Find the stay everyone in a group can say yes to, without anyone revealing their
 
 A host shortlists up to three lodging quotes. Each traveler privately enters (or slides to) the most they'll pay. InBudget shows only which stays fit **everyone** and a shared comfort band. Nobody's individual limit is ever shown.
 
+**Judge demo:** [Open InBudget](https://inbudget-omega.vercel.app/). Try the example or create a shared round, find nearby lodging, enter all-in quotes, and open an invite in another browser. No account or payment is required.
+
 ## Highlights
 
-- **Privacy-first group consensus.** Each traveler's limit stays on their own device or in the server database. The round API never returns it. Results appear only after every payer has answered, and they show just a yes or no per stay plus a comfort band (the highest per-person share that fits everyone, and the lowest share that doesn't).
-- **Exact 1¢ split math.** All-in totals are split across 3–8 paying travelers in integer cents. When a total doesn't divide evenly, the extra `1¢` share is shown, and fit is always checked against the higher share.
+- **Privacy-first group consensus.** Each traveler’s limit stays in their browser. Shared responses send only fit decisions and an optional name. Results appear only after every payer has answered, and they show just a yes or no per stay plus a comfort band (the highest per-person share that fits everyone, and the lowest share that doesn't).
+- **Exact 1¢ split math.** All-in totals are split across 3–8 paying travelers in integer cents. When a total doesn't divide evenly, the number of travelers at each share is shown, and fit is always checked against the higher share.
 - **Interactive Three.js PBR stage.** Each lodge is an auto-rotating golden-hour diorama on its own island, built from CC0 Meshopt/KTX2 `.glb` models with PMREM reflections. It adds custom GLSL fireflies and verdict halos, loads in two progressive stages, and lets you click an island to pick that stay. A `Step +60°` button rotates the model by hand, and `Replay opening` replays the intro.
 - **Scroll choreography.** Scrolling through `#story` moves the camera from inspecting one lodge (`01 / Inspect the quotes`) out to a three-island comparison (`02 / Compare the options`).
 - **Synchronized views.** The opening showcase (`#opening`), 3D stage, plaque bar, price spectrum (`#price-track`), comparison cards (`#quotes`) and the chat-ready **Copy summary** button stay in sync on desktop and on mobile (from `320px`).
@@ -43,7 +45,7 @@ A host shortlists up to three lodging quotes. Each traveler privately enters (or
 
 ## Run & test
 
-Requires Node 20+ for tests and Python 3 for the optional server. There are no dependencies to install.
+Requires Node 20+ for tests and Python 3 for the optional server. Local SQLite mode uses the Python standard library. Hosted Postgres mode uses `requirements.txt`.
 
 ```bash
 # Domain unit tests (CI runs this as the build step before publishing dist/)
@@ -72,9 +74,11 @@ All bodies are JSON and capped at 64 KB. Errors return `{ "error": "..." }`.
 | Method | Route | Description |
 | --- | --- | --- |
 | `GET` | `/api/health` | `{ "ok": true }` when the database is reachable |
+| `POST` | `/api/stays/locations` | Return destination matches |
+| `POST` | `/api/stays/search` | Discover mapped stays within a radius |
 | `POST` | `/api/rounds` | Create a round and return `{ id, hostKey, round }` |
 | `GET` | `/api/rounds/:id` | Round details, `responseCount`, traveler `names`, and `results` (`null` until everyone responds) |
-| `POST` | `/api/rounds/:id/responses` | Add or update a response: `{ traveler, limit, choices, name? }`, with `limit` in cents |
+| `POST` | `/api/rounds/:id/responses` | Add or update a response: `{ traveler, choices, name? }`. Older clients that send `limit` remain compatible. |
 | `DELETE` | `/api/rounds/:id/responses` | Reset all responses (requires the `x-host-key` header) |
 | `DELETE` | `/api/rounds/:id` | Delete the round (requires the `x-host-key` header) |
 
@@ -82,7 +86,21 @@ Static assets under `/vendor/` and `/assets/` are cached for one day. Every resp
 
 ## Deployment
 
-On every push to `main`, `.github/workflows/deploy.yml` runs `npm run build` (the domain tests) and publishes `dist/` as static Pages. The HackOnVibe platform manages that workflow and restores it if it's edited, so change the app code rather than the workflow. The deployed site runs in static mode. Shared invite links need `server.py` running somewhere.
+On every push to `main`, `.github/workflows/deploy.yml` runs `npm run build` (the domain tests) and publishes `dist/` as static Pages. The HackOnVibe platform manages that workflow and restores it if it's edited, so change the app code rather than the workflow. The deployed site runs in static mode. The [judge demo](https://inbudget-omega.vercel.app/) uses Vercel Python Functions and Neon Postgres for shared rounds.
+
+**Find stays** uses Photon and OpenStreetMap to find mapped lodging around the destination when no live key is configured. Map results provide names and links. Check availability and enter the all-in price before saving. A live `STAYINGAPI_KEY` adds date-specific search. Both modes resolve the destination automatically, with an optional coordinate override. Set `INBUDGET_STAY_SANDBOX=1` with a sandbox key only when you want StayingAPI's fixed sample data.
+
+Set `STAYINGAPI_BACKUP_KEY` to configure a fallback. On Windows the server can also read a DPAPI-encrypted backup at `%LOCALAPPDATA%\InBudget\stayingapi-backup.dpapi`. It tries a same-mode backup when the primary is rejected or rate-limited so a sandbox key never substitutes sample listings for a live search.
+
+## Shared beta on Vercel
+
+1. Import the repository as a Vercel project. The configuration publishes `dist/` and routes the shared API to a Python function.
+2. Connect Neon Postgres through the Vercel Marketplace. Give Preview and Production separate Neon branches or databases, each with its own pooled `DATABASE_URL`. Keep StayingAPI keys unset for map-only discovery.
+3. Open `/api/health` on each deployment. The function initializes the Postgres schema on first use and returns a service error if the database is unavailable. To initialize it explicitly, run `python -m pip install -r requirements.txt` and `python -c "from server import init; init()"` with the appropriate database URL loaded.
+4. Hosted search has a shared budget of 60 requests per minute across both search endpoints. For per-IP protection, add a Vercel Firewall rule covering POST requests on `/api/stays/*` and `/api/dispatch` with a 60-second fixed window and 20 requests per IP. Monitor Photon usage during the low-volume beta. Set `INBUDGET_PHOTON_URL` if you switch to another compatible instance.
+5. Verify the preview on two devices. Create a round and submit a response, redeploy the preview against the same database, and confirm the invite and response still work. Deploy production against the initialized production database after preview verification.
+
+The local `python server.py` command continues to use SQLite when `DATABASE_URL` is unset. Local demo rounds and credentials stay on the local machine.
 
 ## Asset pipeline
 
