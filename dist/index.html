@@ -47,7 +47,8 @@
 <div class="progressbox"><div class="pips" id="pips" aria-hidden="true"><span class="on"></span><span class="on"></span><span class="on"></span><span></span></div><p id="progress" role="status">3 of 4 responded</p><p id="who" class="who" hidden></p></div>
 <p id="round-note">Three example travelers have already answered. Your limit is the fourth, and it decides which stays fit.</p>
 <p id="personal" class="personal" hidden></p>
-<div class="round-actions"><button class="primary" id="respond" type="button">Try the final response</button><button class="outline" id="reset" type="button" hidden>Reset example</button></div>
+<p id="round-history" class="fine" hidden></p>
+<div class="round-actions"><button class="primary" id="respond" type="button">Try the final response</button><button class="outline" id="reset" type="button" hidden>Reset example</button><button class="outline" id="update-quotes" data-open="host" type="button" hidden>Update quotes</button><button class="outline" id="copy-reminder" type="button" hidden>Copy reminder</button></div>
 </section>
 <section class="round-section round-panel" id="round-results" aria-labelledby="results-title">
 <h3 id="results-title" tabindex="-1">Group results</h3>
@@ -78,7 +79,7 @@
 <p id="stay-search-attribution" class="fine" hidden>Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></p>
 </fieldset>
 <p id="quote-review" class="fine" role="status"></p>
-<div id="host-quotes"></div><button type="button" id="add" class="outline">+ Add quote</button><p id="host-sharing-note" class="fine">This preview saves the round in this browser. Guest sharing requires a server.</p><p id="form-error" role="alert"></p><button class="primary" type="submit">Save local comparison</button></form></dialog>
+<div id="host-quotes"></div><button type="button" id="add" class="outline">+ Add quote</button><p id="host-sharing-note" class="fine">This preview saves the round in this browser. Guest sharing requires a server.</p><p id="draft-note" class="fine" role="status"></p><p id="form-error" role="alert"></p><button class="primary" type="submit">Save local comparison</button> <button type="button" id="discard-draft" class="outline">Discard draft</button></form></dialog>
 <dialog id="opening" aria-labelledby="opening-title">
 <div class="opening-shell">
   <div class="opening-glow" aria-hidden="true"></div>

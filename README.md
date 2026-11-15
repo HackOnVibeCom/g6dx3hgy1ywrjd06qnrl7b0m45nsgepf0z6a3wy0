@@ -86,7 +86,7 @@ Static assets under `/vendor/` and `/assets/` are cached for one day. Every resp
 
 ## Deployment
 
-On every push to `main`, `.github/workflows/deploy.yml` runs `npm run build` (the domain tests) and publishes `dist/` as static Pages. The HackOnVibe platform manages that workflow and restores it if it's edited, so change the app code rather than the workflow. The deployed site runs in static mode. The [judge demo](https://inbudget-omega.vercel.app/) uses Vercel Python Functions and Neon Postgres for shared rounds.
+On every push to `main`, `.github/workflows/deploy.yml` runs `npm run build` (the domain tests) and attempts to publish `dist/` as static Pages. HackOnVibe manages that workflow. The independent `InBudget checks` workflow runs the JavaScript and Python suites on pull requests and pushes to `main`. The [judge demo](https://inbudget-omega.vercel.app/) uses Vercel Python Functions and Neon Postgres for shared rounds. Deploy it directly while the organizer repository's Vercel Git integration is unavailable.
 
 **Find stays** uses Photon and OpenStreetMap to find mapped lodging around the destination when no live key is configured. Map results provide names and links. Check availability and enter the all-in price before saving. A live `STAYINGAPI_KEY` adds date-specific search. Both modes resolve the destination automatically, with an optional coordinate override. Set `INBUDGET_STAY_SANDBOX=1` with a sandbox key only when you want StayingAPI's fixed sample data.
 
@@ -101,6 +101,16 @@ Set `STAYINGAPI_BACKUP_KEY` to configure a fallback. On Windows the server can a
 5. Verify the preview on two devices. Create a round and submit a response, redeploy the preview against the same database, and confirm the invite and response still work. Deploy production against the initialized production database after preview verification.
 
 The local `python server.py` command continues to use SQLite when `DATABASE_URL` is unset. Local demo rounds and credentials stay on the local machine.
+
+### Recurring comparisons
+
+The host browser saves unfinished trip and quote edits locally. A host can discard the draft or reopen it after a refresh. **Update quotes** opens a separate draft with the current trip details and shortlist. Recheck each all-in total to open the new round with zero responses. Earlier invites show the archived round and link to its successor. Hosts can copy a reminder with the current invite and remaining response count.
+
+Host access is tied to the browser that created the round. Guests can open a public invite and submit fit decisions. The exact amount entered in the browser stays there. The server records daily totals for completed searches, added quotes, copied invites, first responses, reached verdicts and created follow-ups. These counters contain an event name, day and count.
+
+Run `python tools/smoke_hosted.py https://inbudget-omega.vercel.app` after a deployment to check map search, shared invites, private responses, the verdict and a linked follow-up. It creates and deletes disposable rounds. To verify Preview persistence, run it against Preview with `--checkpoint <local-file>`, redeploy against the same database, then run against the new URL with `--resume <local-file>`. The checkpoint temporarily contains disposable host credentials. A protected Preview also requires authorized access.
+
+Keep the public demo on map discovery with manually verified quotes. Before piloting live prices, confirm a live StayingAPI account can serve the target destinations and that its terms allow retaining a price snapshot. Live prices still need a check on the original listing.
 
 ## Asset pipeline
 

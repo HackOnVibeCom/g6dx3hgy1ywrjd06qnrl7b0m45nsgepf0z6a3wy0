@@ -808,6 +808,16 @@ fieldset {
 }
 fieldset legend { font-weight: 700; font-size: 12.5px; padding: 0 6px; color: #2b4233; }
 fieldset .outline { font-size: 12px; min-height: 36px; padding: 6px 12px; }
+dialog .quote-confirmation:not([hidden]) { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+dialog .quote-confirmation input {
+  width: 18px;
+  min-height: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  accent-color: #164c38;
+}
 #stay-radius {
   width: 100%;
   min-height: 44px;

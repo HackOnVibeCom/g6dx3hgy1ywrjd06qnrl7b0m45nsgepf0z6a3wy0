@@ -7,6 +7,7 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import date, timedelta
 from http.server import ThreadingHTTPServer
@@ -75,6 +76,56 @@ class RoundApiTest(unittest.TestCase):
             "POST",
             {"traveler": traveler, "limit": limit},
         )
+
+    def test_follow_up_is_atomic_and_preserves_the_previous_verdict(self):
+        parent = self.create()
+        path = f"/api/rounds/{parent['id']}"
+        headers = {"x-host-key": parent["hostKey"]}
+        payload = self.round_payload()
+        payload["quotes"][0]["total"] += 2000
+        self.assertEqual(self.call(path + "/follow-ups", "POST", payload)[0], 403)
+        unchecked = self.round_payload()
+        del unchecked["quotes"][0]["checked"]
+        self.assertEqual(self.call(path + "/follow-ups", "POST", unchecked, headers)[0], 400)
+        for index in range(payload["payers"]):
+            self.assertEqual(self.respond(parent["id"], f"traveler_token_{index}", 25000)[0], 200)
+        old = self.call(path)[1]
+        barrier = threading.Barrier(2)
+
+        def submit():
+            barrier.wait(timeout=5)
+            return self.call(path + "/follow-ups", "POST", payload, headers)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            requests = [pool.submit(submit) for _ in range(2)]
+            replies = [request.result() for request in requests]
+        self.assertEqual(sorted(status for status, _ in replies), [200, 201])
+        child = replies[0][1]
+        self.assertEqual(child, replies[1][1])
+        self.assertNotEqual(child["hostKey"], parent["hostKey"])
+        self.assertEqual(child["round"]["previousRoundId"], parent["id"])
+        self.assertEqual(child["round"]["responseCount"], 0)
+        self.assertIsNone(child["round"]["results"])
+        child_path = f"/api/rounds/{child['id']}"
+        self.assertNotIn("hostKey", self.call(child_path)[1])
+        self.assertEqual(self.call(path)[1], {**old, "superseded": True, "successorRoundId": child["id"]})
+        self.assertEqual(self.respond(parent["id"], "traveler_token_0", 1)[0], 409)
+        self.assertEqual(self.call(path + "/responses", "DELETE", headers=headers)[0], 409)
+        self.assertEqual(self.call(child_path, "DELETE", headers={"x-host-key": child["hostKey"]})[0], 200)
+        self.assertIsNone(self.call(path)[1]["successorRoundId"])
+        self.assertEqual(self.call(path + "/follow-ups", "POST", payload, headers)[0], 409)
+
+    def test_client_events_store_only_daily_counts(self):
+        with closing(server.connect()) as db:
+            before = db.execute("SELECT COALESCE(SUM(count), 0) AS n FROM round_events WHERE event = ?",
+                                ("quote_added",)).fetchone()["n"]
+        self.assertEqual(self.call("/api/events", "POST", {"event": "first_answer"})[0], 400)
+        for _ in range(2):
+            self.assertEqual(self.call("/api/events", "POST", {"event": "quote_added", "title": "private"})[0], 200)
+        with closing(server.connect()) as db:
+            rows = db.execute("SELECT * FROM round_events WHERE event = ?", ("quote_added",)).fetchall()
+        self.assertEqual(set(rows[0].keys()), {"day", "event", "count"})
+        self.assertEqual(sum(row["count"] for row in rows), before + 2)
 
     def test_health_and_static_site(self):
         with patch.dict(os.environ, {"STAYINGAPI_KEY": "", "STAYINGAPI_BACKUP_KEY": ""}):

@@ -13,6 +13,8 @@
     { "source": "/api/rounds", "destination": "/api/dispatch?inbudget_path=rounds" },
     { "source": "/api/rounds/:id", "destination": "/api/dispatch?inbudget_path=rounds/:id" },
     { "source": "/api/rounds/:id/responses", "destination": "/api/dispatch?inbudget_path=rounds/:id/responses" },
+    { "source": "/api/rounds/:id/follow-ups", "destination": "/api/dispatch?inbudget_path=rounds/:id/follow-ups" },
+    { "source": "/api/events", "destination": "/api/dispatch?inbudget_path=events" },
     { "source": "/api/stays/:operation(locations|search)", "destination": "/api/dispatch?inbudget_path=stays/:operation" }
   ],
   "headers": [

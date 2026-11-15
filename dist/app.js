@@ -125,10 +125,14 @@ function writeHosts(list) {
   try { localStorage.setItem(hostListKey, JSON.stringify(list.slice(0, 12))); } catch {}
 }
 function rememberHost(round) {
-  writeHosts([
-    { id: round.id, title: round.title, start: round.start, end: round.end },
-    ...readHosts().filter(item => item.id !== round.id)
-  ]);
+  const list = readHosts();
+  const item = { id: round.id, title: round.title, count: round.responseCount,
+    payers: round.payers, previous: round.previousRoundId, successor: round.successorRoundId,
+    superseded: round.superseded };
+  const index = list.findIndex(entry => entry.id === item.id);
+  if (index === -1) list.unshift(item);
+  else list[index] = item;
+  writeHosts(list);
 }
 function forgetHost(id) {
   writeHosts(readHosts().filter(item => item.id !== id));
@@ -144,7 +148,7 @@ function travelerToken(id) {
 }
 
 function remoteStamp(payload) {
-  return [payload.responseCount, JSON.stringify(payload.results), JSON.stringify(payload.names || [])].join(':');
+  return JSON.stringify([payload.responseCount, payload.results, payload.names, payload.superseded, payload.successorRoundId]);
 }
 function listPeople(parts) {
   if (parts.length < 2) return parts[0] || '';
@@ -171,17 +175,18 @@ function applyRemote(payload, hostKey) {
     quotes: payload.quotes, destination: payload.destination, radius: payload.radius, demo: false };
   remote = {
     id: payload.id,
-    hostKey: hostKey || remote?.hostKey || storedHostKey(payload.id),
+    hostKey: hostKey || (remote?.id === payload.id && remote.hostKey) || storedHostKey(payload.id),
     count: payload.responseCount,
     results: payload.results,
     names: Array.isArray(payload.names) ? payload.names : [],
+    previous: payload.previousRoundId,
+    successor: payload.successorRoundId,
+    superseded: Boolean(payload.superseded),
     stamp: remoteStamp(payload)
   };
   if (payload.responseCount === 0) unmarkAnswered(payload.id);
-  if (hostKey) {
-    storeHostKey(payload.id, hostKey);
-    rememberHost({ id: payload.id, title: payload.title, start: payload.start, end: payload.end });
-  }
+  if (hostKey) storeHostKey(payload.id, hostKey);
+  if (remote.hostKey) rememberHost(payload);
   const credit = document.querySelector('.footer > span');
   if (credit) credit.textContent = 'Shared round · answers stay private';
 }
@@ -217,11 +222,11 @@ function knownLimit() {
   return round.demo ? privateLimit : null;
 }
 function canRevise() {
-  if (remote) return markedAnswered(remote.id) && answered() > 0;
+  if (remote) return !remote.superseded && markedAnswered(remote.id) && answered() > 0;
   return round.demo && privateLimit !== null && answered() >= round.payers;
 }
 function canAnswer() {
-  return answered() < round.payers || canRevise();
+  return !remote?.superseded && (answered() < round.payers || canRevise());
 }
 function answerLabel() {
   if (round.demo) return canRevise() ? 'Change your answer' : 'Try the final response';
@@ -425,13 +430,15 @@ function renderResults(verdict, quotes, count) {
   const state = $('#results-nav-state');
   const panel = $('#round-results');
   $('#copy-summary').hidden = !verdict;
-  $('#new-round').hidden = !verdict;
-  state.textContent = verdict ? 'Ready' : 'Pending';
+  $('#new-round').hidden = Boolean(remote) || !verdict;
+  state.textContent = verdict ? 'Ready' : remote?.superseded ? 'Closed' : 'Pending';
   $('#results-nav').dataset.ready = String(Boolean(verdict));
   panel.dataset.state = verdict ? 'ready' : 'pending';
   if (!verdict) {
     const remaining = round.payers - count;
-    detail.replaceChildren(element('p', '', `Waiting for ${remaining} more ${remaining === 1 ? 'response' : 'responses'} before revealing which stays fit everyone.`));
+    detail.replaceChildren(element('p', '', remote?.superseded
+      ? 'This round closed before everyone responded.'
+      : `Waiting for ${remaining} more ${remaining === 1 ? 'response' : 'responses'} before revealing which stays fit everyone.`));
     return;
   }
 
@@ -528,14 +535,27 @@ function render(animate = false) {
       ], { duration: 420, easing: 'cubic-bezier(.2,.75,.25,1)' });
     }
   }
-  $('#round-note').textContent = verdict
+  $('#round-note').textContent = remote?.superseded
+    ? 'This round is closed. Its responses and any result are preserved.'
+    : verdict
     ? 'Everyone has responded. Open the group results to review the decision.'
     : remote ? (remote.hostKey ? 'Send the invite below. Each traveler answers on their own device.' : 'Answer on this device. The group only sees which stays fit.')
     : round.demo ? 'Three example travelers have already answered. Your limit is the fourth, and it decides which stays fit.' : 'This local preview collects each response on this device.';
   $('#respond').hidden = !canAnswer();
   $('#respond').textContent = answerLabel();
   showInsight();
-  const hideReset = remote ? !remote.hostKey || count === 0 : round.demo && !verdict;
+  const activeHost = remote?.hostKey && !remote.superseded;
+  $('#update-quotes').hidden = !activeHost;
+  $('#copy-reminder').hidden = !activeHost || count >= round.payers;
+  const historyLinks = $('#round-history');
+  historyLinks.replaceChildren();
+  for (const [id, label] of [[remote?.previous, 'Previous round'], [remote?.successor, 'Updated round']]) {
+    if (!id) continue;
+    if (historyLinks.childNodes.length) historyLinks.append(' · ');
+    historyLinks.append(roundLink(id, label));
+  }
+  historyLinks.hidden = !historyLinks.childNodes.length;
+  const hideReset = remote ? !activeHost || count === 0 : round.demo && !verdict;
   const resetText = remote ? 'Reset responses' : round.demo ? 'Reset example' : 'Return to example';
   $('#reset').hidden = hideReset;
   $('#reset').textContent = resetText;
@@ -545,9 +565,9 @@ function render(animate = false) {
     studioReset.textContent = resetText;
   }
   const studioShare = $('#studio-share');
-  if (studioShare) studioShare.hidden = !remote?.hostKey;
+  if (studioShare) studioShare.hidden = !activeHost;
   deleteButton.hidden = !remote?.hostKey;
-  if (remote?.hostKey) {
+  if (activeHost) {
     const url = location.origin + location.pathname + '?round=' + encodeURIComponent(remote.id);
     const topRow = element('div', 'invite-head');
     topRow.append(
@@ -565,14 +585,23 @@ function render(animate = false) {
     invite.replaceChildren(topRow, linkRow);
     invite.hidden = false;
   } else invite.hidden = true;
-  const hostedRounds = readHosts();
+  renderHosted();
+}
+
+function roundLink(id, label) {
+  const link = element('a', '', label);
+  link.href = '?round=' + encodeURIComponent(id);
+  return link;
+}
+
+function renderHosted() {
+  const hostedRounds = readHosts().filter(item => storedHostKey(item.id) && !item.successor);
   if (hostedRounds.length) {
     hosted.replaceChildren('Your rounds: ');
     hostedRounds.forEach((item, index) => {
       if (index) hosted.append(' · ');
-      const link = element('a', '', item.title || 'Round');
-      link.href = location.pathname + '?round=' + encodeURIComponent(item.id);
-      hosted.append(link);
+      const progress = item.superseded ? ' (closed)' : item.payers ? ` (${item.count}/${item.payers} answered)` : '';
+      hosted.append(roundLink(item.id, (item.title || 'Round') + progress));
     });
     hosted.hidden = false;
   } else hosted.hidden = true;
@@ -581,17 +610,35 @@ function render(animate = false) {
 const host = $('#host');
 const guest = $('#guest');
 const quoteFields = $('#host-quotes');
+let draftParent = null;
+let draftSource = null;
+let draftKey;
+const tripFields = ['title', 'payers', 'start', 'end'];
+const quoteKeys = ['name', 'total', 'url', 'checked'];
+const quoteInput = (field, key) => field.querySelector('[name=quote-' + key + ']');
 function addQuote() {
   if (quoteFields.children.length === 3) return;
   const field = document.createElement('fieldset');
   field.innerHTML = '<legend></legend><label>Stay name<input name="quote-name" required maxlength="70"></label><label>Original listing URL<input name="quote-url" type="url" required placeholder="https://"></label><div class="fieldgrid"><label>All-in total (USD)<input name="quote-total" type="number" min="0.01" max="999999" step=".01" required inputmode="decimal"></label><label>Price checked at<input name="quote-checked" type="datetime-local" required></label></div><p class="fine" data-share></p><button type="button" class="outline" data-remove>Remove quote</button>';
-  field.querySelector('[data-remove]').onclick = () => { if (quoteFields.children.length > 1) field.remove(); updateQuotes(); };
+  const confirmation = element('label', 'quote-confirmation');
+  const confirm = document.createElement('input');
+  confirm.type = 'checkbox';
+  confirm.name = 'quote-confirm';
+  confirmation.append(confirm, ' I rechecked this all-in total');
+  confirmation.hidden = !draftParent;
+  field.querySelector('[data-share]').before(confirmation);
+  field.querySelector('[data-remove]').onclick = () => {
+    if (quoteFields.children.length > 1) field.remove();
+    updateQuotes();
+    saveHostDraft();
+  };
   const checked = field.querySelector('[name=quote-checked]');
   const now = new Date();
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   checked.value = now.toISOString().slice(0, 16);
   quoteFields.append(field);
   updateQuotes();
+  return field;
 }
 
 function updateQuotes() {
@@ -620,15 +667,15 @@ function updateQuotes() {
   const filled = fields.filter(field => !emptyQuote(field));
   fields.forEach((field, index) => {
     const required = filled.length ? !emptyQuote(field) : index === 0;
-    field.querySelectorAll('input').forEach(input => { input.required = required; });
+    quoteKeys.forEach(key => { quoteInput(field, key).required = required; });
+    quoteInput(field, 'confirm').required = required && Boolean(draftParent);
   });
-  const missing = filled.flatMap((field) => {
-    const amount = cents(field.querySelector('[name=quote-total]').value);
-    if (amount > 0) return [];
-    return [field.querySelector('[name=quote-name]').value.trim() || field.querySelector('legend').textContent];
-  });
+  const ready = filled.filter(field => quoteKeys.every(key => quoteInput(field, key).checkValidity()) &&
+    /^https?:\/\//i.test(quoteInput(field, 'url').value) &&
+    (!draftParent || quoteInput(field, 'confirm').checked)).length;
   $('#quote-review').textContent = `${filled.length} of 3 shortlist slots filled.` +
-    (missing.length ? ' All-in total needed for ' + missing.join(', ') + '.' : '');
+    (filled.length ? ` ${ready} of ${filled.length} ready. ` : '') +
+    (ready < filled.length ? 'Complete the listing, all-in total and price check for each quote.' : '');
   const empty = fields.some(emptyQuote);
   $('#stay-search-results').querySelectorAll('button').forEach(button => {
     const added = fields.some(field => field.querySelector('[name=quote-url]').value === button.dataset.url);
@@ -710,6 +757,7 @@ findDestination.onclick = async () => {
         });
         clearStaySearch();
         destinationStatus.textContent = 'Selected: ' + match.label;
+        saveHostDraft();
       };
       return button;
     }));
@@ -792,7 +840,10 @@ searchButton.onclick = async () => {
         field.querySelector('[name=quote-name]').value = stay.name;
         if (sandbox) field.querySelector('[name=quote-total]').value = (stay.total / 100).toFixed(2);
         field.querySelector('[name=quote-url]').value = stay.url;
+        field.dataset.tracked = 'true';
         updateQuotes();
+        trackRoundEvent('quote_added');
+        saveHostDraft();
       };
       item.append(detail, add);
       return item;
@@ -817,39 +868,122 @@ function seedHostDates() {
   startInput.value = iso(start);
   endInput.value = iso(end);
 }
-document.querySelectorAll('[data-open=host]').forEach(button => button.onclick = () => {
-  if (button.id === 'new-round') {
-    for (const field of ['title', 'payers', 'start', 'end']) {
-      host.querySelector('[name=' + field + ']').value = round[field];
-    }
-    quoteFields.replaceChildren();
-    addQuote();
-    resetDestinationChoice();
-    previousDestination = round.destination || null;
-    destinationInput.value = previousDestination || '';
-    $('#stay-radius').value = String(round.radius ?? 25);
-    if (!$('#stay-radius').value) {
-      $('#stay-radius').add(new Option(`${round.radius} miles`, String(round.radius)));
-      $('#stay-radius').value = String(round.radius);
-    }
-    searchCenter.value = '';
-    clearStaySearch();
+function saveHostDraft() {
+  if (!host.open || !draftKey) return;
+  const form = $('#host-form');
+  const trip = Object.fromEntries(tripFields.map(key => [key, form.elements.namedItem(key).value]));
+  const quotes = [...quoteFields.children].map(field => ({
+    ...Object.fromEntries(quoteKeys.map(key => [key, quoteInput(field, key).value])),
+    confirmed: quoteInput(field, 'confirm').checked,
+    tracked: field.dataset.tracked === 'true',
+  }));
+  const draft = { trip, quotes, selectedDestination, previousDestination,
+    destination: destinationInput.value, center: searchCenter.value, radius: $('#stay-radius').value };
+  try { localStorage.setItem(draftKey, JSON.stringify(draft)); }
+  catch { $('#draft-note').textContent = 'Draft storage is unavailable in this browser.'; }
+}
+
+function clearHostDraft() {
+  try { localStorage.removeItem(draftKey); } catch {}
+}
+
+function initializeDraft(restore = true) {
+  let draft;
+  if (restore) {
+    try { draft = JSON.parse(localStorage.getItem(draftKey)); } catch {}
   }
+  const form = $('#host-form');
+  form.reset();
+  for (const key of tripFields) {
+    if (draft?.trip?.[key] != null || draftSource?.[key] != null) {
+      form.elements.namedItem(key).value = draft?.trip?.[key] ?? draftSource[key];
+    }
+  }
+  resetDestinationChoice();
+  clearStaySearch();
+  selectedDestination = draft?.selectedDestination || null;
+  previousDestination = draft ? draft.previousDestination : draftSource?.destination;
+  destinationInput.value = draft?.destination ?? previousDestination ?? '';
+  searchCenter.value = draft?.center ?? '';
+  const destinationLabel = selectedDestination?.label || previousDestination;
+  if (destinationLabel) destinationStatus.textContent = 'Selected: ' + destinationLabel;
+  const radius = String(draft?.radius || draftSource?.radius || 25);
+  const radiusInput = $('#stay-radius');
+  if (![...radiusInput.options].some(option => option.value === radius)) {
+    radiusInput.add(new Option(radius + ' miles', radius));
+  }
+  radiusInput.value = radius;
+  quoteFields.replaceChildren();
+  const startingQuotes = draft?.quotes || (draftParent && draftSource.quotes.map(quote => ({
+    name: quote.name, url: quote.url, total: (quote.total / 100).toFixed(2), tracked: true,
+  }))) || [{}];
+  for (const quote of startingQuotes.slice(0, 3)) {
+    const field = addQuote();
+    quoteKeys.forEach(key => {
+      if (quote[key] != null) quoteInput(field, key).value = quote[key];
+    });
+    quoteInput(field, 'confirm').checked = Boolean(quote.confirmed);
+    if (quote.tracked) field.dataset.tracked = 'true';
+  }
+  if (!quoteFields.children.length) addQuote();
+  $('#host-title').textContent = draftParent ? 'Update quotes' : 'Compare your stays';
+  form.querySelector('button[type=submit]').textContent = draftParent ? 'Create updated round'
+    : server.shared ? 'Create shared round' : 'Save local comparison';
+  $('#host-sharing-note').textContent = draftParent
+    ? 'Confirm every all-in total. The updated round starts with zero responses and the current round closes.'
+    : server.shared ? 'This round is saved on the server and can be shared with an invite link.'
+    : 'This preview saves the round in this browser. Guest sharing requires a server.';
+  $('#draft-note').textContent = draft ? 'Restored the draft saved in this browser.' : 'Changes are saved as a draft in this browser.';
   $('#form-error').textContent = '';
   seedHostDates();
   updateQuotes();
+}
+
+document.querySelectorAll('[data-open=host]').forEach(button => button.onclick = () => {
+  const followUp = button.id === 'update-quotes';
+  if (followUp && (!remote?.hostKey || remote.superseded)) return;
+  draftParent = followUp ? { id: remote.id, key: remote.hostKey } : null;
+  draftSource = followUp || button.id === 'new-round' ? round : null;
+  draftKey = 'inbudget-host-draft-v1:' + (draftParent?.id || 'new');
+  initializeDraft();
   host.showModal();
 });
 document.querySelectorAll('[data-close]').forEach(button => button.onclick = () => button.closest('dialog').close());
-$('#add').onclick = addQuote;
-$('#host-form').addEventListener('input', updateQuotes);
+$('#add').onclick = () => { addQuote(); saveHostDraft(); };
+$('#discard-draft').onclick = () => { clearHostDraft(); initializeDraft(false); };
+$('#host-form').addEventListener('input', event => {
+  const field = event.target.closest('#host-quotes fieldset');
+  if (field) {
+    const confirmation = quoteInput(field, 'confirm');
+    if (quoteKeys.includes(event.target.name.replace('quote-', ''))) confirmation.checked = false;
+    if (event.target === confirmation && confirmation.checked) {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      quoteInput(field, 'checked').value = now.toISOString().slice(0, 16);
+    }
+    if (!field.dataset.tracked && quoteInput(field, 'name').value.trim() &&
+        /^https?:\/\//i.test(quoteInput(field, 'url').value) && quoteInput(field, 'url').checkValidity()) {
+      field.dataset.tracked = 'true';
+      trackRoundEvent('quote_added');
+    }
+  }
+  updateQuotes();
+  saveHostDraft();
+});
 $('#host-form').addEventListener('submit', async event => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
   const error = $('#form-error');
   const start = data.get('start'), end = data.get('end');
   if (end <= start) { error.textContent = 'Check-out must be after check-in.'; return; }
-  const quotes = [...quoteFields.children].filter(field => !emptyQuote(field)).map(field => {
+  const fields = [...quoteFields.children].filter(field => !emptyQuote(field));
+  const parent = draftParent;
+  const submittedDraft = draftKey;
+  if (parent && fields.some(field => !quoteInput(field, 'confirm').checked)) {
+    error.textContent = 'Confirm every all-in total before updating the round.';
+    return;
+  }
+  const quotes = fields.map(field => {
     const get = name => field.querySelector('[name=quote-' + name + ']').value;
     return { name: get('name').trim(), total: cents(get('total')), url: get('url'), checked: new Date(get('checked')).toISOString() };
   });
@@ -866,13 +1000,19 @@ $('#host-form').addEventListener('submit', async event => {
   const payload = { title: data.get('title').trim(), start, end, payers: Number(data.get('payers')), quotes,
     ...(destination ? { destination, radius: Number($('#stay-radius').value) } : {}) };
   const submit = event.currentTarget.querySelector('button[type=submit]');
+  const discard = $('#discard-draft');
+  const close = host.querySelector('[data-close]');
   if (submit.disabled) return;
   submit.disabled = true;
+  discard.disabled = true;
+  close.disabled = true;
   let created;
   try {
     if (await serverReady()) {
-      created = await api('/rounds', { method: 'POST', body: JSON.stringify(payload) });
-    } else if (server.shared) {
+      const path = parent ? '/rounds/' + encodeURIComponent(parent.id) + '/follow-ups' : '/rounds';
+      created = await api(path, { method: 'POST', body: JSON.stringify(payload),
+        ...(parent ? { headers: { 'x-host-key': parent.key } } : {}) });
+    } else if (server.shared || parent) {
       error.textContent = 'Shared rounds are temporarily unavailable. Your quotes are still here. Try again shortly.';
       return;
     }
@@ -881,16 +1021,21 @@ $('#host-form').addEventListener('submit', async event => {
     return;
   } finally {
     submit.disabled = false;
+    discard.disabled = false;
+    close.disabled = false;
   }
   activeQuote = 0;
+  try { localStorage.removeItem(submittedDraft); } catch {}
   if (created) {
+    if (parent) writeHosts(readHosts().map(item => item.id === parent.id
+      ? { ...item, superseded: true, successor: created.id } : item));
     applyRemote(created.round, created.hostKey);
     history.replaceState(null, '', '?round=' + encodeURIComponent(created.id));
     host.close();
     render();
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     $('#invite').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
-    $('#share').focus();
+    $('#share')?.focus();
     return;
   }
   remote = null;
@@ -1289,11 +1434,29 @@ async function copyInviteLink(btn, restoreLabel = 'Copy invite link') {
   try {
     await navigator.clipboard.writeText(url);
     btn.textContent = 'Link copied ✓';
+    trackRoundEvent('invite_copied');
   } catch {
     btn.textContent = 'Select link below';
   }
   setTimeout(() => { btn.textContent = restoreLabel; }, 2400);
 }
+function trackRoundEvent(event) {
+  if (!server.shared) return;
+  api('/events', { method: 'POST', body: JSON.stringify({ event }) }).catch(() => {});
+}
+host.addEventListener('cancel', event => {
+  if (host.querySelector('button[type=submit]').disabled) event.preventDefault();
+});
+$('#copy-reminder').onclick = async event => {
+  if (!remote?.hostKey || remote.superseded) return;
+  const button = event.currentTarget;
+  const remaining = round.payers - answered();
+  const url = roundLink(remote.id, '').href;
+  const message = `Quick reminder to enter your private stay budget. We're waiting for ${remaining} more ${remaining === 1 ? 'response' : 'responses'}.\n${url}`;
+  try { await navigator.clipboard.writeText(message); button.textContent = 'Reminder copied'; }
+  catch { button.textContent = 'Copy unavailable'; }
+  setTimeout(() => { button.textContent = 'Copy reminder'; }, 2400);
+};
 if ($('#studio-share')) $('#studio-share').onclick = event => copyInviteLink(event.currentTarget, 'Copy invite link');
 if ($('#copy-summary')) {
   $('#copy-summary').onclick = async event => {
@@ -1326,6 +1489,14 @@ if (await serverReady() || server.shared) {
   $('#host-sharing-note').textContent = 'This round is saved on the server and can be shared with an invite link.';
   document.querySelector('#host-form button[type=submit]').textContent = 'Create shared round';
 }
+async function refreshHostedRounds() {
+  await Promise.all(readHosts().filter(item => storedHostKey(item.id)).map(async item => {
+    try { rememberHost(await api('/rounds/' + encodeURIComponent(item.id))); }
+    catch (error) { if (error.status === 404) forgetHost(item.id); }
+  }));
+  renderHosted();
+}
+void refreshHostedRounds();
 journey?.start();
 
 let refreshing = false;
@@ -1337,6 +1508,7 @@ async function refreshSharedRound() {
     const payload = await api('/rounds/' + encodeURIComponent(snapshot.id));
     if (remote === snapshot && remoteStamp(payload) !== snapshot.stamp) {
       applyRemote(payload);
+      if (remote.superseded && guest.open) guest.close();
       render(true);
     }
   } catch (error) {

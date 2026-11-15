@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS rounds (
     payers INTEGER NOT NULL,
     destination TEXT,
     radius INTEGER,
+    previous_round_id TEXT REFERENCES rounds(id) ON DELETE SET NULL,
+    superseded_at BIGINT,
     created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS quotes (
@@ -71,7 +73,20 @@ CREATE TABLE IF NOT EXISTS search_budget (
     minute BIGINT NOT NULL,
     count INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS round_events (
+    day TEXT NOT NULL,
+    event TEXT NOT NULL,
+    count INTEGER NOT NULL,
+    PRIMARY KEY(day, event)
+);
 """
+ROUND_COLUMNS = (
+    ("destination", "TEXT"), ("radius", "INTEGER"),
+    ("previous_round_id", "TEXT REFERENCES rounds(id) ON DELETE SET NULL"),
+    ("superseded_at", "BIGINT"),
+)
+SUCCESSOR_INDEX = "CREATE UNIQUE INDEX IF NOT EXISTS rounds_one_successor ON rounds(previous_round_id)"
+CLIENT_EVENTS = {"quote_added", "invite_copied"}
 
 
 class ApiError(Exception):
@@ -103,17 +118,19 @@ def init():
                 for statement in SCHEMA.split(";"):
                     if statement.strip():
                         db.execute(statement)
-                db.execute("ALTER TABLE rounds ADD COLUMN IF NOT EXISTS destination TEXT")
-                db.execute("ALTER TABLE rounds ADD COLUMN IF NOT EXISTS radius INTEGER")
+                for name, field_type in ROUND_COLUMNS:
+                    db.execute(f"ALTER TABLE rounds ADD COLUMN IF NOT EXISTS {name} {field_type}")
+                db.execute(SUCCESSOR_INDEX)
             return
         db.executescript(SCHEMA)
         db.execute("PRAGMA secure_delete = ON")
         with db:
             db.execute("BEGIN IMMEDIATE")
             round_columns = {row[1] for row in db.execute("PRAGMA table_info(rounds)")}
-            for name, field_type in (("destination", "TEXT"), ("radius", "INTEGER")):
+            for name, field_type in ROUND_COLUMNS:
                 if name not in round_columns:
                     db.execute(f"ALTER TABLE rounds ADD COLUMN {name} {field_type}")
+            db.execute(SUCCESSOR_INDEX)
             columns = {row[1] for row in db.execute("PRAGMA table_info(responses)")}
             if "name" not in columns:
                 db.execute("ALTER TABLE responses ADD COLUMN name TEXT")
@@ -156,12 +173,25 @@ class PostgresConnection:
 
 
 def lock_round(db, round_id):
-    sql = "SELECT payers, host_key FROM rounds WHERE id = ?"
+    sql = "SELECT payers, host_key, superseded_at FROM rounds WHERE id = ?"
     if isinstance(db, PostgresConnection):
         sql += " FOR UPDATE"
     else:
         db.execute("BEGIN IMMEDIATE")
     return db.execute(sql, (round_id,)).fetchone()
+
+
+def record_event(db, event):
+    db.execute(
+        "INSERT INTO round_events (day, event, count) VALUES (?, ?, 1) "
+        "ON CONFLICT(day, event) DO UPDATE SET count = round_events.count + 1",
+        (date.today().isoformat(), event),
+    )
+
+
+def require_active_round(row):
+    if row["superseded_at"] is not None:
+        raise ApiError(409, "This round has been superseded. Open the updated round to respond.")
 
 
 def claim_search_budget(db):
@@ -553,6 +583,7 @@ def round_payload(db, round_id):
     if count == row["payers"]:
         choices = [json.loads(response["choices"]) for response in responses]
         results = [all(choice[index] for choice in choices) for index in range(len(quotes))]
+    successor = db.execute("SELECT id FROM rounds WHERE previous_round_id = ?", (round_id,)).fetchone() if row["superseded_at"] is not None else None
     return {
         "id": row["id"],
         "title": row["title"],
@@ -564,28 +595,58 @@ def round_payload(db, round_id):
         "responseCount": count,
         "names": sorted((response["name"] for response in responses if response["name"] is not None), key=str.casefold),
         "results": results,
+        **({"previousRoundId": row["previous_round_id"]} if row["previous_round_id"] else {}),
+        **({"superseded": True, "successorRoundId": successor["id"] if successor else None}
+           if row["superseded_at"] is not None else {}),
     }
+
+
+def insert_round(db, data, previous_round_id=None):
+    round_id = secrets.token_urlsafe(12)
+    host_key = secrets.token_urlsafe(24)
+    db.execute(
+        'INSERT INTO rounds (id, host_key, title, start, "end", payers, created_at, destination, radius, previous_round_id) '
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (round_id, host_key, data["title"], data["start"], data["end"], data["payers"],
+         int(time.time()), data["destination"], data["radius"], previous_round_id),
+    )
+    db.executemany(
+        "INSERT INTO quotes (round_id, position, name, total, url, checked) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            (round_id, index, quote["name"], quote["total"], quote["url"], quote["checked"])
+            for index, quote in enumerate(data["quotes"])
+        ],
+    )
+    return round_id, host_key
 
 
 def create_round(db, payload):
     data = clean_round(payload)
-    round_id = secrets.token_urlsafe(12)
-    host_key = secrets.token_urlsafe(24)
     with db:
-        db.execute(
-            'INSERT INTO rounds (id, host_key, title, start, "end", payers, created_at, destination, radius) '
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (round_id, host_key, data["title"], data["start"], data["end"], data["payers"],
-             int(time.time()), data["destination"], data["radius"]),
-        )
-        db.executemany(
-            "INSERT INTO quotes (round_id, position, name, total, url, checked) VALUES (?, ?, ?, ?, ?, ?)",
-            [
-                (round_id, index, quote["name"], quote["total"], quote["url"], quote["checked"])
-                for index, quote in enumerate(data["quotes"])
-            ],
-        )
+        round_id, host_key = insert_round(db, data)
     return 201, {"id": round_id, "hostKey": host_key, "round": round_payload(db, round_id)}
+
+
+def create_follow_up(db, parent_id, payload, host_key):
+    with db:
+        row = lock_round(db, parent_id)
+        if row is None:
+            raise ApiError(404, "That round does not exist.")
+        if not host_key or not secrets.compare_digest(row["host_key"], host_key):
+            raise ApiError(403, "Only the host can create a follow-up.")
+        successor = db.execute(
+            "SELECT id, host_key FROM rounds WHERE previous_round_id = ?", (parent_id,),
+        ).fetchone()
+        if successor:
+            return 200, {"id": successor["id"], "hostKey": successor["host_key"], "round": round_payload(db, successor["id"])}
+        require_active_round(row)
+        data = clean_round(payload)
+        if any(not quote["checked"] for quote in data["quotes"]):
+            raise ApiError(400, "Verify every all-in quote before creating the updated round.")
+        round_id, new_key = insert_round(db, data, parent_id)
+        db.execute("UPDATE rounds SET superseded_at = ? WHERE id = ?", (int(time.time()), parent_id))
+        record_event(db, "follow_up_created")
+    return 201, {"id": round_id, "hostKey": new_key, "round": round_payload(db, round_id)}
 
 
 def add_response(db, round_id, payload):
@@ -601,6 +662,7 @@ def add_response(db, round_id, payload):
         row = lock_round(db, round_id)
         if row is None:
             raise ApiError(404, "That round does not exist.")
+        require_active_round(row)
         payers = row["payers"]
         quotes = db.execute(
             "SELECT total FROM quotes WHERE round_id = ? ORDER BY position", (round_id,)
@@ -622,6 +684,11 @@ def add_response(db, round_id, payload):
             "created_at = excluded.created_at, name = excluded.name",
             (round_id, traveler, json.dumps(choices), int(time.time()), name),
         )
+        if existing is None:
+            if count == 0:
+                record_event(db, "first_answer")
+            if count + 1 == payers:
+                record_event(db, "verdict_reached")
     return 200, {"round": round_payload(db, round_id)}
 
 
@@ -634,6 +701,7 @@ def reset_responses(db, round_id, host_key):
             raise ApiError(404, "That round does not exist.")
         if not host_key or not secrets.compare_digest(row["host_key"], host_key):
             raise ApiError(403, "Only the host can reset this round.")
+        require_active_round(row)
         db.execute("DELETE FROM responses WHERE round_id = ?", (round_id,))
     return 200, {"round": round_payload(db, round_id)}
 
@@ -723,7 +791,11 @@ class Handler(SimpleHTTPRequestHandler):
                 if os.environ.get("VERCEL") == "1":
                     with closing(connect()) as db:
                         claim_search_budget(db)
-                return self.send_json(200, operation(data))
+                result = operation(data)
+                if route.endswith("/search"):
+                    with closing(connect()) as db, db:
+                        record_event(db, "search_completed")
+                return self.send_json(200, result)
             except ApiError as error:
                 return self.error_json(error)
         try:
@@ -733,6 +805,17 @@ class Handler(SimpleHTTPRequestHandler):
                 match = re.fullmatch(r"/api/rounds/([A-Za-z0-9_-]+)/responses", route)
                 if match:
                     return self.send_json(*add_response(db, match.group(1), self.read_json()))
+                match = re.fullmatch(r"/api/rounds/([A-Za-z0-9_-]{12,40})/follow-ups", route)
+                if match:
+                    return self.send_json(*create_follow_up(db, match.group(1), self.read_json(), self.headers.get("x-host-key")))
+                if route == "/api/events":
+                    data = self.read_json()
+                    event = data.get("event") if isinstance(data, dict) else None
+                    if not isinstance(event, str) or event not in CLIENT_EVENTS:
+                        raise ApiError(400, "Unknown event.")
+                    with db:
+                        record_event(db, event)
+                    return self.send_json(200, {"ok": True})
                 raise ApiError(404, "Not found.")
         except ApiError as error:
             return self.error_json(error)
